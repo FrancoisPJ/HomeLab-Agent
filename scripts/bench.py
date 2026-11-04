@@ -20,6 +20,8 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Any
 
+import httpx
+
 from homelab_agent.config.models import OpenAICompatBackend
 from homelab_agent.llm.base import Message, StreamDelta, StreamDone, ToolSpec
 from homelab_agent.llm.openai_compat import OpenAICompatClient
@@ -76,25 +78,46 @@ SPEED_PROMPT = "Explique en cinq phrases comment fonctionne un thermostat."
 
 @dataclass
 class SpeedResult:
-    ttft_s: float
+    first_text_s: float  # time until the first visible text (includes any "thinking")
     total_s: float
     output_tokens: int
-    tok_per_s: float
+    end_to_end_tok_s: float  # output tokens / total time (prompt processing included)
+    server_decode_tok_s: float | None  # llama-server's own measure, when reported
+    server_prompt_tok_s: float | None
 
 
-async def speed_run(client: OpenAICompatClient, max_tokens: int) -> SpeedResult:
+async def server_timings(url: str, model: str, max_tokens: int, timeout_s: float) -> dict[str, Any]:
+    """llama-server adds a `timings` object to non-streamed answers."""
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": SPEED_PROMPT}],
+        "max_tokens": max_tokens,
+    }
+    async with httpx.AsyncClient(timeout=timeout_s) as c:
+        resp = await c.post(url.rstrip("/") + "/chat/completions", json=payload)
+    data: dict[str, Any] = resp.json() if resp.status_code == 200 else {}
+    return data.get("timings") or {}
+
+
+async def speed_run(client: OpenAICompatClient, args: argparse.Namespace) -> SpeedResult:
     start = time.perf_counter()
     first: float | None = None
     usage_out = 0
-    async for ev in client.stream([Message("user", SPEED_PROMPT)], max_tokens=max_tokens):
+    async for ev in client.stream([Message("user", SPEED_PROMPT)], max_tokens=args.max_tokens):
         if isinstance(ev, StreamDelta) and first is None:
             first = time.perf_counter()
         elif isinstance(ev, StreamDone):
             usage_out = ev.result.usage.output_tokens
     end = time.perf_counter()
-    first = first or end
-    gen = max(end - first, 1e-6)
-    return SpeedResult(first - start, end - start, usage_out, usage_out / gen)
+    timings = await server_timings(args.url, args.model, args.max_tokens, args.timeout)
+    return SpeedResult(
+        first_text_s=(first or end) - start,
+        total_s=end - start,
+        output_tokens=usage_out,
+        end_to_end_tok_s=usage_out / max(end - start, 1e-6),
+        server_decode_tok_s=timings.get("predicted_per_second"),
+        server_prompt_tok_s=timings.get("prompt_per_second"),
+    )
 
 
 async def tool_case(
@@ -139,16 +162,22 @@ async def main() -> int:
     cfg = OpenAICompatBackend(tier="gpu", url=args.url, model=args.model, timeout_s=args.timeout)
     client = OpenAICompatClient("bench", cfg)
     try:
-        speeds = [await speed_run(client, args.max_tokens) for _ in range(args.runs)]
+        speeds = [await speed_run(client, args) for _ in range(args.runs)]
         tools = [await tool_case(client, *case) for case in TOOL_CASES]
     finally:
         await client.aclose()
 
     print(f"\n# {args.model} @ {args.url}")
-    print(f"time to first token : {statistics.median(s.ttft_s for s in speeds):.2f} s (median)")
+    print(f"first visible text  : {statistics.median(s.first_text_s for s in speeds):.2f} s")
     print(
-        f"generation speed    : {statistics.median(s.tok_per_s for s in speeds):.1f} tok/s (median)"
+        f"end-to-end speed    : {statistics.median(s.end_to_end_tok_s for s in speeds):.1f} tok/s"
     )
+    decode = [s.server_decode_tok_s for s in speeds if s.server_decode_tok_s]
+    prompt = [s.server_prompt_tok_s for s in speeds if s.server_prompt_tok_s]
+    if decode:
+        print(f"decode (server)     : {statistics.median(decode):.1f} tok/s")
+    if prompt:
+        print(f"prompt (server)     : {statistics.median(prompt):.1f} tok/s")
     score = sum(t["ok"] for t in tools)
     print(f"tool-calling        : {score}/{len(tools)}")
     for t in tools:

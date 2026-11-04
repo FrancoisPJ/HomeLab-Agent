@@ -31,6 +31,15 @@ make restart
    Compose). Le script mesure le délai avant le premier jeton, les jetons/s et le score sur six cas
    d'appel d'outils domotiques. Gardez le plus petit modèle qui obtient 6/6 avec une latence acceptable.
 
+### Mesure de référence (pas sur votre matériel)
+
+Pendant le développement, la chaîne réelle image `llama-cpu` → llama-swap → llama-server → agent a
+été vérifiée avec un modèle minuscule (`Qwen/Qwen3-0.6B-GGUF`, `Qwen3-0.6B-Q8_0.gguf`) sur 4 vCPU de
+cloud : environ 59 jetons/s en décodage, et **3 à 4 sur 6** au test d'appel d'outils (il a par exemple
+répondu `turn_on` à « éteins »). Conclusion : sous ~3B, les appels d'outils ne sont pas fiables, d'où
+le chemin rapide sans LLM pour les commandes simples. Ces chiffres ne disent rien de la RTX 3070 ni de
+l'i9-10850K : mesurez chez vous.
+
 ## Candidats (à vérifier au moment de l'installation)
 
 Les noms et fichiers ci-dessous ont été vérifiés sur Hugging Face lors de l'écriture de ce document
