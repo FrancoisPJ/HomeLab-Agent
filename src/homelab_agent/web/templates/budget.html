@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Budget{% endblock %}
+{% block content %}
+<h1>Budget cloud</h1>
+<div class="card"><p>Cloud <strong>{{ 'activé' if cfg.cloud.enabled else 'désactivé' }}</strong> · alerte à {{ (cfg.cloud.limits.alert_at * 100)|int }} %
+· plafonds globaux : {{ '%.2f'|format(cfg.cloud.limits.daily_eur) }} €/jour, {{ '%.2f'|format(cfg.cloud.limits.monthly_eur) }} €/mois</p>
+<table><tr><th>Fournisseur</th><th>Aujourd'hui</th><th>Plafond jour</th><th>Ce mois</th><th>Plafond mois</th><th>Tarif entrée / sortie (€/M jetons)</th></tr>
+{% for s in status %}{% set pr = cfg.cloud.pricing.get(s.provider) %}
+<tr><td><code>{{ s.provider }}</code></td><td>{{ '%.4f'|format(s.day_eur) }} €</td><td>{{ '%.2f'|format(s.daily_limit) }} €</td>
+<td>{{ '%.4f'|format(s.month_eur) }} €</td><td>{{ '%.2f'|format(s.monthly_limit) }} €</td>
+<td>{% if pr %}{{ pr.in_per_mtok }} / {{ pr.out_per_mtok }}{% else %}<span class="warn">non renseigné</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">Aucun backend cloud configuré.</td></tr>{% endfor %}</table>
+<p class="muted">Les tarifs et plafonds se règlent dans la section <code>cloud</code> de la configuration.</p></div>
+{% endblock %}

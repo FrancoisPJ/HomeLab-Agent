@@ -1,0 +1,30 @@
+# secrets & local config
+.env
+config.yaml
+# runtime data
+data/
+models/
+engines/
+*.gguf
+*.db
+*.db-wal
+*.db-shm
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+# editors
+.idea/
+.vscode/
+.DS_Store
+.local-ca.crt
+.hypothesis/

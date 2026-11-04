@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Tâches{% endblock %}
+{% block content %}
+<h1>Tâches CPU</h1>
+<div class="card" hx-get="/jobs" hx-trigger="every 10s" hx-select=".card" hx-swap="outerHTML">
+<table><tr><th>#</th><th>Statut</th><th>Demande</th><th>Essais</th><th>Créée (UTC)</th><th>Résultat / erreur</th></tr>
+{% for j in jobs %}<tr><td>{{ j.id }}</td><td>{{ j.status }}</td><td>{{ j.prompt[:120] }}</td><td>{{ j.attempts }}</td>
+<td>{{ j.created_at.strftime('%d/%m %H:%M') }}</td><td class="muted">{{ (j.result or j.error or '')[:200] }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">Aucune tâche.</td></tr>{% endfor %}</table></div>
+{% endblock %}

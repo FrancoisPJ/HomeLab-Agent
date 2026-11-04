@@ -1,0 +1,11 @@
+# Hot reload for development, on top of the `dev` profile:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile dev up --build
+# The local ./src shadows the installed package and the agent restarts on every change.
+services:
+  agent-dev:
+    read_only: false
+    environment:
+      PYTHONPATH: /app/src
+    volumes:
+      - ./src:/app/src:ro
+    entrypoint: ["watchfiles", "--filter", "python", "homelab-agent run", "/app/src"]

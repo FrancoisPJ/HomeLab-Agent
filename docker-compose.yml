@@ -1,0 +1,135 @@
+# homelab-agent — Docker Compose
+#
+# Profils :
+#   full      agent + llama-gpu + llama-cpu   (serveur avec GPU NVIDIA)
+#   cpu-only  agent + llama-cpu               (pas de GPU : le niveau GPU bascule sur le CPU)
+#   no-gpu    agent seul                      (moteurs ailleurs ou cloud uniquement)
+#   dev       agent + faux services (LLM, Home Assistant, Telegram) — aucune dépendance réelle
+#
+#   make up                 # = docker compose --profile full up -d
+#   docker compose --profile cpu-only up -d
+#   docker compose --profile dev up --build
+#
+# Rien n'écoute publiquement : le panneau est publié sur 127.0.0.1 uniquement et les
+# moteurs llama.cpp (sans authentification) restent sur le réseau interne Compose.
+
+x-agent: &agent
+  build:
+    context: .
+    dockerfile: docker/agent.Dockerfile
+  image: homelab-agent:local
+  restart: unless-stopped
+  user: "${HLA_UID:-1000}:${HLA_GID:-1000}"
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+x-llama: &llama
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  expose: ["8080"]
+
+services:
+  agent:
+    <<: *agent
+    profiles: [full, cpu-only, no-gpu]
+    env_file: .env
+    volumes:
+      - ./config.yaml:/config/config.yaml
+      - ./data:/data
+    ports:
+      - "127.0.0.1:${PANEL_PORT:-8099}:8099"
+
+  llama-gpu:
+    <<: *llama
+    profiles: [full]
+    build:
+      context: .
+      dockerfile: docker/llama-gpu.Dockerfile
+      args:
+        CUDA_VERSION: "${CUDA_VERSION:-12.2.2}"
+        CUDA_ARCHITECTURES: "${CUDA_ARCHITECTURES:-86}"
+    image: homelab-agent-llama-gpu:local
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+      - ./engines/llama-swap-gpu.yaml:/config/llama-swap.yaml:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  llama-cpu:
+    <<: *llama
+    profiles: [full, cpu-only]
+    build:
+      context: .
+      dockerfile: docker/llama-cpu.Dockerfile
+    image: homelab-agent-llama-cpu:local
+    mem_limit: "${LLAMA_CPU_MEM_LIMIT:-12g}"
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+      - ./engines/llama-swap-cpu.yaml:/config/llama-swap.yaml:ro
+
+  # ------------------------------------------------------------------ dev profile
+  agent-dev:
+    <<: *agent
+    profiles: [dev]
+    user: "10001:10001"
+    environment:
+      HLA_CONFIG: /config/config.yaml
+      TELEGRAM_BOT_TOKEN: "123456:fake-dev-token"
+      HA_TOKEN: fake-ha-token
+      PANEL_PASSWORD: dev-password-123
+    volumes:
+      - ./deploy/config.dev.yaml:/config/config.yaml:ro
+      - dev-data:/data
+    ports:
+      - "127.0.0.1:8099:8099"
+    depends_on:
+      fake-llm-gpu: { condition: service_healthy }
+      fake-llm-cpu: { condition: service_healthy }
+      fake-ha: { condition: service_healthy }
+      fake-telegram: { condition: service_healthy }
+
+  fake-llm-gpu: &fake
+    profiles: [dev]
+    build:
+      context: .
+      dockerfile: docker/fake-llm/Dockerfile
+    image: homelab-agent-fakes:local
+    command: ["llm", "--port", "8080"]
+    ports: ["127.0.0.1:18080:8080"]
+
+  fake-llm-cpu:
+    <<: *fake
+    command: ["llm", "--port", "8080"]
+    ports: ["127.0.0.1:18081:8080"]
+
+  fake-ha:
+    <<: *fake
+    command: ["ha", "--port", "8123"]
+    environment: { FAKE_HA_TOKEN: fake-ha-token }
+    ports: ["127.0.0.1:8123:8123"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8123/health', timeout=2)"]
+      interval: 5s
+      retries: 10
+
+  fake-telegram:
+    <<: *fake
+    command: ["telegram", "--port", "8081"]
+    ports: ["127.0.0.1:8081:8081"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=2)"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  dev-data:

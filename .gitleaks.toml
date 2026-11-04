@@ -1,0 +1,17 @@
+# gitleaks configuration: default rules + allowlist for obviously fake test values.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake values used by tests, examples and the dev profile"
+regexes = [
+  '''123456:fake-dev-token''',
+  '''123456:TEST''',
+  '''000000000:REPLACE_ME''',
+  '''dev-password-123''',
+  '''fake-ha-token''',
+  '''correct-horse-battery''',
+  '''AAH4fakefakefakefakefakefakefake12''',
+  '''sk-ant-api03-abcdefghijklmnop''',
+]
+paths = ['''uv\.lock''']

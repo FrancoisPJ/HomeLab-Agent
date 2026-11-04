@@ -1,0 +1,81 @@
+[project]
+name = "homelab-agent"
+version = "0.1.0"
+description = "Personal AI agent driven from Telegram, routing between local llama.cpp (GPU/CPU) and cloud LLMs, with Home Assistant control."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "httpx>=0.27",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20",
+    "aiogram>=3.15",
+    "anthropic>=2.5,<3",
+    "google-genai>=2.0,<3",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.12",
+    "ruamel.yaml>=0.18",
+    "websockets>=13",
+]
+
+[project.scripts]
+homelab-agent = "homelab_agent.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.115",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/homelab_agent"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "ASYNC", "RUF", "S", "PT", "C4", "RET"]
+ignore = ["S101", "S104", "S105", "RUF001", "RUF002", "RUF003", "S311"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S603", "S105", "S106", "S108", "E501", "PT018", "RUF059", "ASYNC109", "PT011", "SIM117"]
+"scripts/**" = ["S603", "S607", "ASYNC230", "E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/homelab_agent"]
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["homelab_agent.fakes.*", "homelab_agent.web.*", "homelab_agent.gateway.aiogram_adapter"]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests against the docker compose dev stack (need HLA_E2E=1)",
+]
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["homelab_agent"]
+omit = ["*/fakes/*"]

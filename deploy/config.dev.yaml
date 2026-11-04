@@ -1,0 +1,33 @@
+# Configuration of the `dev` compose profile and of the end-to-end tests.
+# Every service is a fake: nothing here talks to real hardware or paid APIs.
+agent:
+  language: fr
+  log_format: text
+telegram:
+  enabled: true
+  token_env: TELEGRAM_BOT_TOKEN
+  api_base: http://fake-telegram:8081
+  allowed_user_ids: [111]
+  stream_edit_interval_s: 0.3
+  confirm_timeout_s: 10
+backends:
+  gpu_fast: { kind: openai_compat, tier: gpu, url: "http://fake-llm-gpu:8080/v1", model: fast, timeout_s: 10 }
+  cpu_heavy: { kind: openai_compat, tier: cpu, url: "http://fake-llm-cpu:8080/v1", model: heavy, timeout_s: 30 }
+  cloud_fake: { kind: openai_compat, tier: cloud, url: "http://fake-llm-cpu:8080/v1", model: cloud, timeout_s: 30 }
+routing:
+  fast_path: { enabled: true, aliases: { salon: light.salon } }
+  tiers: { gpu: [gpu_fast], cpu: [cpu_heavy], cloud: [cloud_fake] }
+  health_interval_s: 5
+  unhealthy_cooldown_s: 5
+jobs: { max_concurrent: 1, poll_interval_s: 0.5 }
+cloud:
+  enabled: true
+  pricing: { cloud_fake: { in_per_mtok: 1000, out_per_mtok: 1000 } }
+  limits: { monthly_eur: 0.05, daily_eur: 0.05, alert_at: 0.8 }
+home_assistant:
+  url: http://fake-ha:8123
+  token_env: HA_TOKEN
+  confirm: [{ domain: lock }]
+web: { enabled: true, port: 8099, password_env: PANEL_PASSWORD }
+models: { items: [] }
+store: { path: /data/agent.db }

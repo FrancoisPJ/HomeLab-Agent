@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Configuration{% endblock %}
+{% block content %}
+<h1>Configuration</h1>
+<div class="card">
+<p class="muted">Source de vérité unique : <code>config.yaml</code>. Le contenu est validé avant d'être écrit. Les permissions, le routage et le budget s'appliquent tout de suite ; les changements de backends, de Telegram ou du panneau demandent un redémarrage. Les secrets restent dans <code>.env</code>.</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if saved %}<p class="ok">✅ Enregistré et rechargé.</p>{% endif %}
+<form method="post" action="/config"><textarea name="text" spellcheck="false">{{ text }}</textarea>
+<p><button>Valider et enregistrer</button></p></form></div>
+{% endblock %}

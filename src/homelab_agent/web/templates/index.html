@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}État{% endblock %}
+{% block content %}
+<h1>État</h1>
+<div class="grid">
+  <div class="card"><h2>Cloud</h2>
+    <div class="big {{ 'ok' if cfg.cloud.enabled else 'muted' }}">{{ 'activé' if cfg.cloud.enabled else 'désactivé' }}</div>
+    <div class="muted">Jour {{ '%.2f'|format(day) }} € / {{ '%.2f'|format(cfg.cloud.limits.daily_eur) }} € ·
+    Mois {{ '%.2f'|format(month) }} € / {{ '%.2f'|format(cfg.cloud.limits.monthly_eur) }} €</div></div>
+  <div class="card"><h2>Home Assistant</h2>
+    {% if ha %}
+      <div class="big {{ 'ok' if ha.client.connected else 'bad' }}">{{ 'connecté' if ha.client.connected else 'déconnecté' }}</div>
+      <div class="muted">{{ ha.client.cache.entities|length }} entités en cache</div>
+    {% else %}<div class="big muted">désactivé</div>{% endif %}
+  </div>
+</div>
+<div class="card"><h2>Moteurs</h2>
+<table><tr><th>Niveau</th><th>Backend</th><th>Modèle</th><th>État</th></tr>
+{% for b in backends %}<tr><td>{{ b.tier }}</td><td><code>{{ b.name }}</code></td><td><code>{{ b.model }}</code></td>
+<td class="{{ 'ok' if b.up else 'bad' }}">{{ ('🟢 disponible' if b.up else '🔴 indisponible') if b.probed else '… en attente' }}</td></tr>{% endfor %}
+</table></div>
+<div class="card"><h2>Dernières réponses</h2>
+<table><tr><th>Date (UTC)</th><th>Niveau</th><th>Backend</th><th>Latence</th><th>Jetons</th><th>Coût</th></tr>
+{% for i in interactions %}<tr><td>{{ i.created_at.strftime('%d/%m %H:%M:%S') }}</td><td>{{ i.tier }}</td><td>{{ i.backend }}</td>
+<td>{{ i.latency_ms }} ms</td><td>{{ i.tokens_in }} / {{ i.tokens_out }}</td><td>{{ '%.4f'|format(i.cost_eur) }} €</td></tr>
+{% else %}<tr><td colspan="6" class="muted">Rien pour l'instant.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

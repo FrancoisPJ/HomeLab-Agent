@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Audit{% endblock %}
+{% block content %}
+<h1>Journal d'audit</h1>
+<div class="card"><table><tr><th>Date (UTC)</th><th>Demandeur</th><th>Niveau / modèle</th><th>Outil</th><th>Paramètres</th><th>Résultat</th></tr>
+{% for a in entries %}<tr><td>{{ a.created_at.strftime('%d/%m %H:%M:%S') }}</td><td>{{ a.requester }}</td><td>{{ a.tier }} · <code>{{ a.model }}</code></td>
+<td><code>{{ a.tool }}</code></td><td><code>{{ a.params[:200] }}</code></td>
+<td class="{{ 'ok' if a.outcome == 'ok' else 'bad' }}">{{ a.outcome }}{% if a.detail %}<br><span class="muted">{{ a.detail[:200] }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">Journal vide.</td></tr>{% endfor %}</table></div>
+{% endblock %}

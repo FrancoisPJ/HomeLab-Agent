@@ -1,0 +1,265 @@
+"""Telegram front-end logic (allowlist, commands, streaming, confirmations).
+
+Kept independent from the Telegram library through the small ``BotApi`` protocol, so that
+it is unit-testable; ``aiogram_adapter`` wires it to the real Bot API (long polling).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+import uuid
+from collections.abc import Awaitable, Callable
+from typing import Protocol
+
+from homelab_agent.config.models import TelegramSection, Tier
+from homelab_agent.gateway.base import IncomingMessage, Replier, StreamHandle
+from homelab_agent.observability.metrics import METRICS
+
+log = logging.getLogger(__name__)
+
+Button = tuple[str, str]  # (label, callback data)
+
+
+class BotApi(Protocol):
+    async def send_message(
+        self, chat_id: str, text: str, buttons: list[Button] | None = None
+    ) -> int: ...
+
+    async def edit_message_text(
+        self, chat_id: str, message_id: int, text: str, buttons: list[Button] | None = None
+    ) -> None: ...
+
+    async def answer_callback(self, callback_id: str, text: str = "") -> None: ...
+
+
+def split_text(text: str, limit: int) -> list[str]:
+    """Split on paragraph/line boundaries when possible, never above ``limit``."""
+    if len(text) <= limit:
+        return [text]
+    chunks: list[str] = []
+    rest = text
+    while len(rest) > limit:
+        cut = rest.rfind("\n\n", 0, limit)
+        if cut < limit // 2:
+            cut = rest.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = rest.rfind(" ", 0, limit)
+        if cut <= 0:
+            cut = limit
+        chunks.append(rest[:cut].rstrip())
+        rest = rest[cut:].lstrip()
+    if rest:
+        chunks.append(rest)
+    return chunks
+
+
+HELP_TEXT = """Commandes :
+/status – état des moteurs et du budget
+/model – moteurs et modèles configurés
+/cloud <texte> – forcer le cloud
+/deep <texte> – forcer le CPU (réponse différée)
+/jobs – tâches en cours
+/reset – oublier la conversation
+/help – cette aide
+Sinon, écris simplement ta demande."""
+
+
+class StreamEditor:
+    """Streams an answer by editing one message, respecting a minimum edit interval."""
+
+    def __init__(
+        self,
+        api: BotApi,
+        chat_id: str,
+        *,
+        interval_s: float,
+        max_chars: int,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.api = api
+        self.chat_id = chat_id
+        self.interval_s = interval_s
+        self.max_chars = max_chars
+        self.clock = clock
+        self.message_id: int | None = None
+        self._last_edit = 0.0
+        self._shown = ""
+
+    async def _show(self, text: str) -> None:
+        text = text[: self.max_chars]
+        if text == self._shown or not text.strip():
+            return
+        if self.message_id is None:
+            self.message_id = await self.api.send_message(self.chat_id, text)
+        else:
+            await self.api.edit_message_text(self.chat_id, self.message_id, text)
+        self._shown = text
+        self._last_edit = self.clock()
+
+    async def update(self, text: str) -> None:
+        if self.message_id is not None and self.clock() - self._last_edit < self.interval_s:
+            return
+        preview = text if len(text) <= self.max_chars - 2 else text[: self.max_chars - 2]
+        await self._show(preview + " …")
+
+    async def finish(self, text: str) -> None:
+        chunks = split_text(text, self.max_chars)
+        await self._show(chunks[0])
+        for chunk in chunks[1:]:
+            await self.api.send_message(self.chat_id, chunk)
+
+
+class TelegramReplier:
+    def __init__(self, frontend: TelegramFrontend, chat_id: str) -> None:
+        self.f = frontend
+        self.chat_id = chat_id
+
+    async def send(self, text: str) -> None:
+        for chunk in split_text(text, self.f.cfg().max_message_chars):
+            await self.f.api.send_message(self.chat_id, chunk)
+
+    def stream(self) -> StreamHandle:
+        cfg = self.f.cfg()
+        return StreamEditor(
+            self.f.api,
+            self.chat_id,
+            interval_s=cfg.stream_edit_interval_s,
+            max_chars=cfg.max_message_chars,
+            clock=self.f.clock,
+        )
+
+    async def confirm(self, question: str) -> bool:
+        return await self.f.ask_confirmation(self.chat_id, question)
+
+
+Handler = Callable[[IncomingMessage, Replier], Awaitable[None]]
+TextProvider = Callable[[], Awaitable[str]]
+ChatAction = Callable[[str], Awaitable[str]]
+
+
+class TelegramFrontend:
+    def __init__(
+        self,
+        api: BotApi,
+        get_section: Callable[[], TelegramSection],
+        handler: Handler,
+        *,
+        status_text: TextProvider,
+        model_text: TextProvider,
+        jobs_text: ChatAction,
+        reset_chat: ChatAction,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.api = api
+        self.cfg = get_section
+        self.handler = handler
+        self.status_text = status_text
+        self.model_text = model_text
+        self.jobs_text = jobs_text
+        self.reset_chat = reset_chat
+        self.clock = clock
+        self._pending: dict[str, tuple[str, asyncio.Future[bool]]] = {}
+
+    # ------------------------------------------------------------- notifier
+    async def notify(self, chat_id: str, text: str) -> None:
+        await TelegramReplier(self, chat_id).send(text)
+
+    def replier_for(self, chat_id: str) -> Replier:
+        return TelegramReplier(self, chat_id)
+
+    # ------------------------------------------------------------ allowlist
+    def is_allowed(self, user_id: int | str) -> bool:
+        try:
+            uid = int(user_id)
+        except (TypeError, ValueError):
+            return False
+        return uid in self.cfg().allowed_user_ids
+
+    # ------------------------------------------------------------- messages
+    async def on_message(self, user_id: int | str, chat_id: int | str, text: str) -> None:
+        if not self.is_allowed(user_id):
+            METRICS.inc("telegram_rejected_total")
+            log.warning("ignored message from non-allowlisted user %s", user_id)
+            return  # silent refusal
+        chat = str(chat_id)
+        replier = TelegramReplier(self, chat)
+        text = (text or "").strip()
+        if not text:
+            return
+        if text.startswith("/"):
+            cmd, _, arg = text.partition(" ")
+            cmd = cmd.split("@", 1)[0].lower()
+            arg = arg.strip()
+            if cmd in ("/start", "/help"):
+                await replier.send(HELP_TEXT)
+            elif cmd == "/status":
+                await replier.send(await self.status_text())
+            elif cmd == "/model":
+                await replier.send(await self.model_text())
+            elif cmd == "/jobs":
+                await replier.send(await self.jobs_text(chat))
+            elif cmd == "/reset":
+                await replier.send(await self.reset_chat(chat))
+            elif cmd in ("/cloud", "/deep"):
+                if not arg:
+                    await replier.send(f"Usage : {cmd} <ta demande>")
+                    return
+                tier = Tier.CLOUD if cmd == "/cloud" else Tier.CPU
+                await self._run(IncomingMessage(str(user_id), chat, arg, tier), replier)
+            else:
+                await replier.send("Commande inconnue. /help pour la liste.")
+            return
+        await self._run(IncomingMessage(str(user_id), chat, text), replier)
+
+    async def _run(self, msg: IncomingMessage, replier: Replier) -> None:
+        try:
+            await self.handler(msg, replier)
+        except Exception:
+            log.exception("error while handling a message")
+            await replier.send("❌ Erreur interne, voir les journaux.")
+
+    # -------------------------------------------------------- confirmations
+    async def ask_confirmation(self, chat_id: str, question: str) -> bool:
+        token = uuid.uuid4().hex[:12]
+        fut: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+        self._pending[token] = (chat_id, fut)
+        msg_id = await self.api.send_message(
+            chat_id, question, buttons=[("✅ Oui", f"cf:{token}:y"), ("❌ Non", f"cf:{token}:n")]
+        )
+        try:
+            answer = await asyncio.wait_for(fut, timeout=self.cfg().confirm_timeout_s)
+        except TimeoutError:
+            answer = False
+            await self.api.edit_message_text(chat_id, msg_id, question + "\n⌛ Expiré.")
+        finally:
+            self._pending.pop(token, None)
+        return answer
+
+    async def on_callback(
+        self,
+        user_id: int | str,
+        chat_id: int | str,
+        callback_id: str,
+        data: str,
+        message_id: int | None = None,
+    ) -> None:
+        if not self.is_allowed(user_id):
+            log.warning("ignored callback from non-allowlisted user %s", user_id)
+            return
+        parts = data.split(":")
+        if len(parts) != 3 or parts[0] != "cf":
+            await self.api.answer_callback(callback_id)
+            return
+        pending = self._pending.get(parts[1])
+        if pending is None or pending[0] != str(chat_id) or pending[1].done():
+            await self.api.answer_callback(callback_id, "Demande expirée.")
+            return
+        yes = parts[2] == "y"
+        pending[1].set_result(yes)
+        await self.api.answer_callback(callback_id, "Confirmé" if yes else "Annulé")
+        if message_id is not None:
+            await self.api.edit_message_text(
+                str(chat_id), message_id, "✅ Confirmé." if yes else "❌ Annulé."
+            )

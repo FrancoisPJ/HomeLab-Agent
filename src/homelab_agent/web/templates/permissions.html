@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% block title %}Permissions{% endblock %}
+{% block content %}
+<h1>Permissions Home Assistant</h1>
+<p class="muted">Appliquées par le code à chaque action (LLM local, cloud ou chemin rapide). Les modifications sont écrites dans <code>config.yaml</code> et prises en compte immédiatement.</p>
+<div class="card"><h2>Politique par défaut</h2>
+<form method="post" action="/permissions/default" class="inline">
+<select name="policy">{% for p in policies %}<option value="{{ p }}" {{ 'selected' if cfg.home_assistant.default_policy.value == p }}>{{ p }}</option>{% endfor %}</select>
+<button>Enregistrer</button></form></div>
+
+<div class="card"><h2>Confirmation obligatoire (bouton Oui/Non dans Telegram)</h2>
+{% set active = confirm|map(attribute='domain')|list %}
+<div class="inline">{% for d in suggested %}
+<form method="post" action="/permissions/confirm" class="inline">
+<input type="hidden" name="domain" value="{{ d }}"><input type="hidden" name="enabled" value="{{ 'off' if d in active else 'on' }}">
+<button class="{{ '' if d in active else 'ghost' }}">{{ '✓ ' if d in active }}{{ d }}</button></form>{% endfor %}</div>
+<p class="muted">Recommandé pour les serrures, alarmes et ouvrants. Désactivé par défaut.</p></div>
+
+<div class="card"><h2>Règles</h2>
+<table><tr><th>#</th><th>Domaine</th><th>Zone</th><th>Entité (motif)</th><th>Mode</th><th>Confirmer</th><th></th></tr>
+{% for r in rules %}<tr><td>{{ loop.index0 }}</td><td>{{ r.domain or '' }}</td><td>{{ r.area or '' }}</td><td><code>{{ r.entity or '' }}</code></td><td>{{ r.mode.value }}</td><td>{{ '✓' if r.confirm }}</td>
+<td><form method="post" action="/permissions/rule/{{ loop.index0 }}/delete"><button class="ghost">Supprimer</button></form></td></tr>
+{% else %}<tr><td colspan="7" class="muted">Aucune règle : la politique par défaut s'applique.</td></tr>{% endfor %}
+</table>
+<form method="post" action="/permissions/rule" class="inline" style="margin-top:.8rem">
+<input name="domain" placeholder="domaine (light)"><input name="area" placeholder="zone (salon)"><input name="entity" placeholder="entité ou motif (lock.*)">
+<select name="mode">{% for p in policies %}<option>{{ p }}</option>{% endfor %}</select>
+<label><input type="checkbox" name="confirm"> confirmer</label><button>Ajouter</button></form></div>
+
+<div class="card"><h2>Entités</h2>
+{% if not ha %}<p class="muted">Home Assistant est désactivé.</p>
+{% elif not groups %}<p class="muted">Aucune entité en cache (Home Assistant injoignable ?).</p>{% endif %}
+{% for domain, rows in groups.items() %}
+<details><summary>{{ domain }} <span class="muted">({{ rows|length }})</span></summary>
+<table><tr><th>Entité</th><th>Zone</th><th>Effectif</th><th>Règle propre</th></tr>
+{% for row in rows %}{% include "_entity_row.html" %}{% endfor %}</table></details>
+{% endfor %}</div>
+{% endblock %}

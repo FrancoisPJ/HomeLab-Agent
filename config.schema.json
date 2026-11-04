@@ -1,0 +1,1006 @@
+{
+  "$defs": {
+    "AgentSection": {
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "default": "fr",
+          "description": "Reply language (ISO code).",
+          "title": "Language",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "Europe/Paris",
+          "description": "IANA time zone used in prompts and logs.",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "log_level": {
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Log Level",
+          "type": "string"
+        },
+        "log_format": {
+          "default": "json",
+          "enum": [
+            "json",
+            "text"
+          ],
+          "title": "Log Format",
+          "type": "string"
+        },
+        "system_prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional extra instructions appended to the built-in system prompt.",
+          "title": "System Prompt"
+        },
+        "history_messages": {
+          "default": 12,
+          "description": "Number of past messages kept as conversation context.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "History Messages",
+          "type": "integer"
+        },
+        "max_tool_rounds": {
+          "default": 6,
+          "description": "Max LLM/tool round trips per reply.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Max Tool Rounds",
+          "type": "integer"
+        }
+      },
+      "title": "AgentSection",
+      "type": "object"
+    },
+    "AnthropicBackend": {
+      "additionalProperties": false,
+      "properties": {
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "default": "cloud"
+        },
+        "model": {
+          "description": "Model identifier sent to the backend.",
+          "title": "Model",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 60,
+          "exclusiveMinimum": 0,
+          "title": "Timeout S",
+          "type": "number"
+        },
+        "max_output_tokens": {
+          "default": 1024,
+          "minimum": 16,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "temperature": {
+          "default": 0.3,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "kind": {
+          "const": "anthropic",
+          "default": "anthropic",
+          "title": "Kind",
+          "type": "string"
+        },
+        "api_key_env": {
+          "default": "ANTHROPIC_API_KEY",
+          "title": "Api Key Env",
+          "type": "string"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Url"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "AnthropicBackend",
+      "type": "object"
+    },
+    "CloudLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "monthly_eur": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Monthly Eur",
+          "type": "number"
+        },
+        "daily_eur": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Daily Eur",
+          "type": "number"
+        },
+        "alert_at": {
+          "default": 0.8,
+          "description": "Fraction of a limit that sends an alert.",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Alert At",
+          "type": "number"
+        },
+        "per_provider": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Limits"
+          },
+          "title": "Per Provider",
+          "type": "object"
+        }
+      },
+      "title": "CloudLimits",
+      "type": "object"
+    },
+    "CloudSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "pricing": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Pricing"
+          },
+          "description": "Keyed by backend name.",
+          "title": "Pricing",
+          "type": "object"
+        },
+        "limits": {
+          "$ref": "#/$defs/CloudLimits"
+        }
+      },
+      "title": "CloudSection",
+      "type": "object"
+    },
+    "EngineSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "default_threads": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Default Threads",
+          "type": "integer"
+        },
+        "health_timeout_s": {
+          "default": 300,
+          "minimum": 10,
+          "title": "Health Timeout S",
+          "type": "integer"
+        }
+      },
+      "title": "EngineSettings",
+      "type": "object"
+    },
+    "EscalationSection": {
+      "additionalProperties": false,
+      "properties": {
+        "to_cpu_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "To Cpu Keywords",
+          "type": "array"
+        },
+        "to_cloud_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "To Cloud Keywords",
+          "type": "array"
+        },
+        "long_message_chars": {
+          "default": 600,
+          "description": "Messages longer than this go to the CPU tier (0 = disabled).",
+          "minimum": 0,
+          "title": "Long Message Chars",
+          "type": "integer"
+        },
+        "max_tool_failures": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Max Tool Failures",
+          "type": "integer"
+        },
+        "allow_model_escalation": {
+          "default": true,
+          "description": "Expose the internal `escalate` tool to the fast model.",
+          "title": "Allow Model Escalation",
+          "type": "boolean"
+        }
+      },
+      "title": "EscalationSection",
+      "type": "object"
+    },
+    "FastPathSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "aliases": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Spoken name -> entity_id, e.g. {'salon': 'light.salon'}.",
+          "title": "Aliases",
+          "type": "object"
+        }
+      },
+      "title": "FastPathSection",
+      "type": "object"
+    },
+    "GeminiBackend": {
+      "additionalProperties": false,
+      "properties": {
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "default": "cloud"
+        },
+        "model": {
+          "description": "Model identifier sent to the backend.",
+          "title": "Model",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 60,
+          "exclusiveMinimum": 0,
+          "title": "Timeout S",
+          "type": "number"
+        },
+        "max_output_tokens": {
+          "default": 1024,
+          "minimum": 16,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "temperature": {
+          "default": 0.3,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "kind": {
+          "const": "gemini",
+          "default": "gemini",
+          "title": "Kind",
+          "type": "string"
+        },
+        "api_key_env": {
+          "default": "GEMINI_API_KEY",
+          "title": "Api Key Env",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "GeminiBackend",
+      "type": "object"
+    },
+    "HomeAssistantSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "url": {
+          "default": "http://homeassistant.local:8123",
+          "title": "Url",
+          "type": "string"
+        },
+        "token_env": {
+          "default": "HA_TOKEN",
+          "title": "Token Env",
+          "type": "string"
+        },
+        "verify_ssl": {
+          "default": true,
+          "title": "Verify Ssl",
+          "type": "boolean"
+        },
+        "default_policy": {
+          "$ref": "#/$defs/Policy",
+          "default": "allow"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/PermissionRule"
+          },
+          "title": "Rules",
+          "type": "array"
+        },
+        "confirm": {
+          "description": "Entities whose control requires a Yes/No in Telegram.",
+          "items": {
+            "$ref": "#/$defs/Selector"
+          },
+          "title": "Confirm",
+          "type": "array"
+        },
+        "context_max_chars": {
+          "default": 3000,
+          "description": "Size limit of the entity summary.",
+          "minimum": 200,
+          "title": "Context Max Chars",
+          "type": "integer"
+        },
+        "context_domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Context Domains",
+          "type": "array"
+        },
+        "request_timeout_s": {
+          "default": 10,
+          "exclusiveMinimum": 0,
+          "title": "Request Timeout S",
+          "type": "number"
+        }
+      },
+      "title": "HomeAssistantSection",
+      "type": "object"
+    },
+    "JobsSection": {
+      "additionalProperties": false,
+      "properties": {
+        "max_concurrent": {
+          "default": 1,
+          "description": "Heavy CPU jobs running at once.",
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Max Concurrent",
+          "type": "integer"
+        },
+        "poll_interval_s": {
+          "default": 2.0,
+          "exclusiveMinimum": 0,
+          "title": "Poll Interval S",
+          "type": "number"
+        },
+        "max_attempts": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Max Attempts",
+          "type": "integer"
+        }
+      },
+      "title": "JobsSection",
+      "type": "object"
+    },
+    "Limits": {
+      "additionalProperties": false,
+      "properties": {
+        "monthly_eur": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Monthly Eur",
+          "type": "number"
+        },
+        "daily_eur": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Daily Eur",
+          "type": "number"
+        }
+      },
+      "title": "Limits",
+      "type": "object"
+    },
+    "ModelItem": {
+      "additionalProperties": false,
+      "description": "A GGUF model served by llama.cpp. Rendered into llama-swap configs.",
+      "properties": {
+        "name": {
+          "description": "Name used by backends (`model:` field) and llama-swap.",
+          "title": "Name",
+          "type": "string"
+        },
+        "engine": {
+          "enum": [
+            "gpu",
+            "cpu"
+          ],
+          "title": "Engine",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Hugging Face repository, e.g. Qwen/Qwen3-4B-GGUF",
+          "title": "Repo",
+          "type": "string"
+        },
+        "file": {
+          "description": "GGUF file in the repository.",
+          "title": "File",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        },
+        "ctx_size": {
+          "default": 4096,
+          "minimum": 512,
+          "title": "Ctx Size",
+          "type": "integer"
+        },
+        "n_gpu_layers": {
+          "default": 99,
+          "description": "Layers offloaded to the GPU (gpu engine).",
+          "minimum": 0,
+          "title": "N Gpu Layers",
+          "type": "integer"
+        },
+        "threads": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "CPU threads (default: engine setting).",
+          "title": "Threads"
+        },
+        "flash_attn": {
+          "default": false,
+          "title": "Flash Attn",
+          "type": "boolean"
+        },
+        "cache_type_k": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. q8_0 to save VRAM",
+          "title": "Cache Type K"
+        },
+        "cache_type_v": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Type V"
+        },
+        "parallel": {
+          "default": 1,
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Parallel",
+          "type": "integer"
+        },
+        "mlock": {
+          "default": false,
+          "title": "Mlock",
+          "type": "boolean"
+        },
+        "ttl_s": {
+          "default": 0,
+          "description": "Unload after this many idle seconds (0 = keep loaded).",
+          "minimum": 0,
+          "title": "Ttl S",
+          "type": "integer"
+        },
+        "extra_args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Args",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "engine",
+        "repo",
+        "file"
+      ],
+      "title": "ModelItem",
+      "type": "object"
+    },
+    "ModelsSection": {
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "default": "./models",
+          "title": "Dir",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ModelItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "gpu": {
+          "$ref": "#/$defs/EngineSettings"
+        },
+        "cpu": {
+          "$ref": "#/$defs/EngineSettings"
+        }
+      },
+      "title": "ModelsSection",
+      "type": "object"
+    },
+    "OpenAICompatBackend": {
+      "additionalProperties": false,
+      "description": "Any server exposing ``/v1/chat/completions`` (llama-server, llama-swap...).",
+      "properties": {
+        "tier": {
+          "$ref": "#/$defs/Tier"
+        },
+        "model": {
+          "description": "Model identifier sent to the backend.",
+          "title": "Model",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 60,
+          "exclusiveMinimum": 0,
+          "title": "Timeout S",
+          "type": "number"
+        },
+        "max_output_tokens": {
+          "default": 1024,
+          "minimum": 16,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "temperature": {
+          "default": 0.3,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "kind": {
+          "const": "openai_compat",
+          "default": "openai_compat",
+          "title": "Kind",
+          "type": "string"
+        },
+        "url": {
+          "description": "Base URL including /v1, e.g. http://llama-gpu:8080/v1",
+          "title": "Url",
+          "type": "string"
+        },
+        "api_key_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Api Key Env"
+        },
+        "max_context": {
+          "default": 4096,
+          "minimum": 512,
+          "title": "Max Context",
+          "type": "integer"
+        },
+        "concurrency": {
+          "default": 1,
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Concurrency",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tier",
+        "model",
+        "url"
+      ],
+      "title": "OpenAICompatBackend",
+      "type": "object"
+    },
+    "PermissionRule": {
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Domain"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Area"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity"
+        },
+        "mode": {
+          "$ref": "#/$defs/Policy"
+        },
+        "confirm": {
+          "default": false,
+          "title": "Confirm",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "PermissionRule",
+      "type": "object"
+    },
+    "Policy": {
+      "enum": [
+        "allow",
+        "read_only",
+        "deny"
+      ],
+      "title": "Policy",
+      "type": "string"
+    },
+    "Pricing": {
+      "additionalProperties": false,
+      "properties": {
+        "in_per_mtok": {
+          "default": 0,
+          "description": "Price in EUR per million input tokens.",
+          "minimum": 0,
+          "title": "In Per Mtok",
+          "type": "number"
+        },
+        "out_per_mtok": {
+          "default": 0,
+          "description": "Price in EUR per million output tokens.",
+          "minimum": 0,
+          "title": "Out Per Mtok",
+          "type": "number"
+        }
+      },
+      "title": "Pricing",
+      "type": "object"
+    },
+    "RoutingSection": {
+      "additionalProperties": false,
+      "properties": {
+        "fast_path": {
+          "$ref": "#/$defs/FastPathSection"
+        },
+        "tiers": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "Backends of each tier, in order of preference.",
+          "propertyNames": {
+            "$ref": "#/$defs/Tier"
+          },
+          "title": "Tiers",
+          "type": "object"
+        },
+        "escalation": {
+          "$ref": "#/$defs/EscalationSection"
+        },
+        "fallback_order": {
+          "description": "Order in which tiers are tried when the chosen one is unavailable.",
+          "items": {
+            "$ref": "#/$defs/Tier"
+          },
+          "title": "Fallback Order",
+          "type": "array"
+        },
+        "health_interval_s": {
+          "default": 30,
+          "minimum": 5,
+          "title": "Health Interval S",
+          "type": "integer"
+        },
+        "unhealthy_cooldown_s": {
+          "default": 30,
+          "minimum": 1,
+          "title": "Unhealthy Cooldown S",
+          "type": "integer"
+        }
+      },
+      "title": "RoutingSection",
+      "type": "object"
+    },
+    "Selector": {
+      "additionalProperties": false,
+      "description": "Matches entities. Every field set must match (AND). ``entity`` accepts globs.",
+      "properties": {
+        "domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Domain"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Area"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity"
+        }
+      },
+      "title": "Selector",
+      "type": "object"
+    },
+    "StoreSection": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "default": "./data/agent.db",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "title": "StoreSection",
+      "type": "object"
+    },
+    "TelegramSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "token_env": {
+          "default": "TELEGRAM_BOT_TOKEN",
+          "title": "Token Env",
+          "type": "string"
+        },
+        "allowed_user_ids": {
+          "description": "Numeric Telegram user ids allowed to talk to the bot. Others are ignored.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Allowed User Ids",
+          "type": "array"
+        },
+        "api_base": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override of the Bot API URL (tests / self-hosted Bot API server).",
+          "title": "Api Base"
+        },
+        "stream_edit_interval_s": {
+          "default": 1.2,
+          "description": "Minimum delay between two edits of a streamed message.",
+          "minimum": 0.3,
+          "title": "Stream Edit Interval S",
+          "type": "number"
+        },
+        "max_message_chars": {
+          "default": 4000,
+          "maximum": 4096,
+          "minimum": 500,
+          "title": "Max Message Chars",
+          "type": "integer"
+        },
+        "confirm_timeout_s": {
+          "default": 60,
+          "description": "Delay before a Yes/No prompt expires.",
+          "minimum": 5,
+          "title": "Confirm Timeout S",
+          "type": "integer"
+        }
+      },
+      "title": "TelegramSection",
+      "type": "object"
+    },
+    "Tier": {
+      "enum": [
+        "gpu",
+        "cpu",
+        "cloud"
+      ],
+      "title": "Tier",
+      "type": "string"
+    },
+    "WebSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "bind": {
+          "default": "127.0.0.1",
+          "title": "Bind",
+          "type": "string"
+        },
+        "port": {
+          "default": 8099,
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Port",
+          "type": "integer"
+        },
+        "password_env": {
+          "default": "PANEL_PASSWORD",
+          "title": "Password Env",
+          "type": "string"
+        }
+      },
+      "title": "WebSection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root of ``config.yaml``.",
+  "properties": {
+    "agent": {
+      "$ref": "#/$defs/AgentSection"
+    },
+    "telegram": {
+      "$ref": "#/$defs/TelegramSection"
+    },
+    "backends": {
+      "additionalProperties": {
+        "discriminator": {
+          "mapping": {
+            "anthropic": "#/$defs/AnthropicBackend",
+            "gemini": "#/$defs/GeminiBackend",
+            "openai_compat": "#/$defs/OpenAICompatBackend"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/OpenAICompatBackend"
+          },
+          {
+            "$ref": "#/$defs/AnthropicBackend"
+          },
+          {
+            "$ref": "#/$defs/GeminiBackend"
+          }
+        ]
+      },
+      "title": "Backends",
+      "type": "object"
+    },
+    "routing": {
+      "$ref": "#/$defs/RoutingSection"
+    },
+    "jobs": {
+      "$ref": "#/$defs/JobsSection"
+    },
+    "cloud": {
+      "$ref": "#/$defs/CloudSection"
+    },
+    "home_assistant": {
+      "$ref": "#/$defs/HomeAssistantSection"
+    },
+    "web": {
+      "$ref": "#/$defs/WebSection"
+    },
+    "models": {
+      "$ref": "#/$defs/ModelsSection"
+    },
+    "store": {
+      "$ref": "#/$defs/StoreSection"
+    }
+  },
+  "title": "homelab-agent configuration",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

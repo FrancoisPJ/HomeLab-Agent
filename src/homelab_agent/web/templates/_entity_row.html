@@ -1,0 +1,17 @@
+<tr id="row-{{ row.e.entity_id|replace('.', '-') }}">
+  <td><code>{{ row.e.entity_id }}</code><br><span class="muted">{{ row.e.name }}</span></td>
+  <td>{{ row.e.area_name or '—' }}</td>
+  <td><span class="pill {{ 'ok' if row.effective == 'allow' else ('warn' if row.effective == 'read_only' else 'bad') }}">{{ row.effective }}</span>
+      {% if row.confirm %}<span class="pill warn">confirmation</span>{% endif %}
+      <br><span class="muted" style="font-size:.8rem">{{ row.reason }}</span></td>
+  <td>
+    <form class="inline" hx-post="/permissions/entity" hx-target="closest tr" hx-swap="outerHTML" hx-trigger="change">
+      <input type="hidden" name="entity_id" value="{{ row.e.entity_id }}">
+      <select name="mode">
+        <option value="inherit" {{ 'selected' if row.own == 'inherit' }}>hérité</option>
+        {% for p in policies %}<option value="{{ p }}" {{ 'selected' if row.own == p }}>{{ p }}</option>{% endfor %}
+      </select>
+      <label><input type="checkbox" name="confirm" {{ 'checked' if row.own_confirm }}> confirmer</label>
+    </form>
+  </td>
+</tr>
