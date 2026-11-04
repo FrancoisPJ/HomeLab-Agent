@@ -3,7 +3,7 @@
 ARG LLAMA_CPP_REF=b12000
 ARG LLAMA_SWAP_VERSION=260
 
-FROM ubuntu:24.04 AS build
+FROM ubuntu:26.04 AS build
 ARG LLAMA_CPP_REF
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates build-essential cmake libcurl4-openssl-dev \
@@ -25,12 +25,12 @@ RUN cmake -B build \
  && cp build/bin/llama-server /out/ \
  && find build -name "*.so*" -exec cp -P {} /out/lib/ \;
 
-FROM ubuntu:24.04 AS swap
+FROM ubuntu:26.04 AS swap
 ARG LLAMA_SWAP_VERSION
 ADD https://github.com/mostlygeek/llama-swap/releases/download/v${LLAMA_SWAP_VERSION}/llama-swap_${LLAMA_SWAP_VERSION}_linux_amd64.tar.gz /tmp/ls.tgz
 RUN tar -xzf /tmp/ls.tgz -C /tmp && install -m 0755 /tmp/llama-swap /llama-swap
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl libgomp1 ca-certificates \
  && rm -rf /var/lib/apt/lists/* \

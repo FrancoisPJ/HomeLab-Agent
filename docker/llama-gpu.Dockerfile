@@ -33,7 +33,7 @@ RUN cmake -B build \
  && cp build/bin/llama-server /out/ \
  && find build -name "*.so*" -exec cp -P {} /out/lib/ \;
 
-FROM ubuntu:24.04 AS swap
+FROM ubuntu:26.04 AS swap
 ARG LLAMA_SWAP_VERSION
 ADD https://github.com/mostlygeek/llama-swap/releases/download/v${LLAMA_SWAP_VERSION}/llama-swap_${LLAMA_SWAP_VERSION}_linux_amd64.tar.gz /tmp/ls.tgz
 RUN tar -xzf /tmp/ls.tgz -C /tmp && install -m 0755 /tmp/llama-swap /llama-swap
