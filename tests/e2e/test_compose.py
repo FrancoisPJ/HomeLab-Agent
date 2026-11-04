@@ -117,9 +117,12 @@ def test_5_confirmation_flow_for_locks() -> None:
 def test_6_cloud_cap_then_fallback() -> None:
     since = send("/cloud première question cloud")
     wait_text(lambda t: "(cloud)" in t, since)
+    # the first answer costs more than the cap: a budget alert follows it
+    wait_text(lambda t: "Budget cloud" in t, since)
     since = send("/cloud deuxième question cloud")
-    sent = wait_text(lambda t: "plafond" in t, since)
-    assert any("bascule" in m["text"] for m in sent)
+    sent = wait_text(lambda t: "bascule" in t, since)
+    fallback = next(m["text"] for m in sent if "bascule" in m["text"])
+    assert "plafond" in fallback
 
 
 def test_7_gpu_outage_falls_back() -> None:

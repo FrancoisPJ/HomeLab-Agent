@@ -30,7 +30,7 @@ jobs:
           - name: fakes
             file: docker/fake-llm/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Free disk space (CUDA image)
         if: matrix.name == 'llama-gpu'
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -68,7 +68,7 @@ jobs:
     needs: [images]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
