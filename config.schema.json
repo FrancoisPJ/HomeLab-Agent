@@ -213,6 +213,7 @@
     },
     "AnthropicBackend": {
       "additionalProperties": false,
+      "description": "Note: the current Messages API ignores `temperature`; it is not sent.",
       "properties": {
         "tier": {
           "$ref": "#/$defs/Tier",
@@ -870,6 +871,7 @@
         },
         "concurrency": {
           "default": 1,
+          "description": "Requests sent at once (match the model's `parallel`).",
           "maximum": 16,
           "minimum": 1,
           "title": "Concurrency",
@@ -1318,6 +1320,13 @@
           "default": "./data/agent.db",
           "title": "Path",
           "type": "string"
+        },
+        "retention_days": {
+          "default": 180,
+          "description": "Delete conversations, interactions, audit entries and finished jobs older than this (0 = keep forever). Cloud spend is kept at least 400 days.",
+          "minimum": 0,
+          "title": "Retention Days",
+          "type": "integer"
         }
       },
       "title": "StoreSection",

@@ -13,6 +13,8 @@ make schema     # régénère config.schema.json après une modification du code
 ```
 
 Les valeurs peuvent référencer l'environnement : `url: ${HA_URL}` ou `${HA_URL:-http://homeassistant.local:8123}`.
+Pour écrire littéralement `${...}`, doublez le dollar : `$${...}`. Par sécurité, un texte venant
+d'une conversation (routine créée depuis Telegram) ne peut jamais contenir `${`.
 Les champs `*_env` contiennent le **nom** d'une variable, jamais la valeur.
 
 Une erreur donne un message lisible, par exemple :
@@ -45,7 +47,8 @@ Un dictionnaire `nom → moteur`. Champs communs : `tier` (`gpu`, `cpu`, `cloud`
 
 | `kind` | Champs propres |
 |---|---|
-| `openai_compat` | `url` (avec `/v1`), `api_key_env` (facultatif), `max_context` (doit correspondre au `ctx_size` du modèle) |
+| `openai_compat` | `url` (avec `/v1`), `api_key_env` (facultatif), `max_context` (doit correspondre au `ctx_size` du modèle), `concurrency` (requêtes simultanées, à aligner sur `parallel`) |
+| `anthropic` | (l'API Messages actuelle ignore `temperature`, qui n'est pas envoyée) |
 | `anthropic` | `api_key_env`, `base_url` |
 | `gemini` | `api_key_env` |
 
@@ -79,8 +82,10 @@ size exceeded » — la demande passe au moteur suivant (niveau voisin), sans ma
 `limits.daily_eur`, `limits.monthly_eur`, `limits.alert_at`, `limits.per_provider`. Voir [cloud-budget.md](cloud-budget.md).
 
 ### `home_assistant`
-`url`, `token_env`, `verify_ssl`, `default_policy`, `rules`, `confirm`, `context_max_chars`,
-`context_domains`, `request_timeout_s`. Voir [home-assistant.md](home-assistant.md).
+`url`, `token_env`, `verify_ssl`, `default_policy`, `rules`, `confirm`, `blocked_services`,
+`allowed_services`, `untargeted_domains`, `context_max_chars`, `context_domains`,
+`request_timeout_s`. Voir [home-assistant.md](home-assistant.md). Préférez une URL `https://` :
+en HTTP, le token transite en clair sur le réseau local.
 
 ### `web`
 `enabled`, `bind` (127.0.0.1), `port`, `password_env`. Dans Docker, le conteneur écoute sur
@@ -118,7 +123,10 @@ par le préréglage `cpu-only`).
 Après modification : `make engines` (génère `engines/llama-swap-*.yaml`), `make models`, `make restart`.
 
 ### `store`
-`path` de la base SQLite (`/data/agent.db` dans le conteneur via le volume `./data`).
+`path` de la base SQLite (`/data/agent.db` dans le conteneur via le volume `./data`) et
+`retention_days` (180) : chaque jour, les conversations, interactions, entrées d'audit et tâches
+terminées plus anciennes sont supprimées (0 = jamais). Les dépenses cloud sont gardées au moins 400
+jours pour les plafonds mensuels.
 
 ## Ce qui se recharge à chaud
 
@@ -129,3 +137,6 @@ Après modification : `make engines` (génère `engines/llama-swap-*.yaml`), `ma
 | routage, mots-clés, budget, tarifs | immédiatement |
 | allowlist Telegram | immédiatement |
 | backends, URL HA, token, panneau, modèles | au redémarrage (`make restart`) |
+
+Une modification **à la main** de `config.yaml` est détectée en quelques secondes et rechargée ; si
+le fichier est invalide, l'erreur est journalisée et la configuration précédente reste active.

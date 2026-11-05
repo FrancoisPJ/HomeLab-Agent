@@ -38,7 +38,8 @@ Comportement :
   notées « heures calmes » dans le journal.
 - **Anti-répétition** : une alerte qui repasse fausse puis vraie dans le `cooldown_s` n'est pas
   renvoyée.
-- **Au démarrage**, les conditions déjà vraies (porte ouverte avant le redémarrage) sont réarmées.
+- **Au démarrage**, les conditions déjà vraies (porte ouverte avant le redémarrage) sont réarmées ;
+  l'anti-répétition est gardé en base, donc un redémarrage ne renvoie pas une alerte déjà envoyée.
 - **Bouton d'action** : à usage unique, valable `action_ttl_s` (1 h), uniquement dans la conversation
   qui l'a reçu. L'action passe par **le même moteur de permissions** que tout le reste (et par la
   confirmation Oui/Non si elle est configurée). Sans `entity`, la cible est l'entité qui a déclenché
@@ -150,6 +151,10 @@ routines:
     prompt: "Résume l'activité de la semaine de la maison à partir de l'historique des capteurs principaux."
     tier: cpu
 ```
+
+**Agent arrêté au mauvais moment.** Un rappel ponctuel manqué est envoyé au redémarrage avec la
+mention « en retard » s'il date de moins de `missed_grace_s` (2 h) ; au-delà, il est supprimé et tu
+reçois « ⚠️ Routine manquée ». Les routines répétées reprennent simplement à la prochaine échéance.
 
 Les routines `check` respectent les permissions de lecture : une entité masquée (`deny`) n'apparaît
 jamais dans un rapport.

@@ -7,13 +7,15 @@ import contextlib
 import logging
 import os
 import signal
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import uvicorn
 
-from homelab_agent.config.loader import ConfigStore
+from homelab_agent.config.loader import ConfigError, ConfigStore
 from homelab_agent.config.models import AppConfig, Tier
 from homelab_agent.core.budget import BudgetManager
 from homelab_agent.core.jobs import JobQueue
@@ -253,6 +255,46 @@ async def start_jobs(services: Services) -> None:
     await services.jobs.start()
 
 
+HEARTBEAT = Path(os.environ.get("HLA_HEARTBEAT", "/tmp/hla-heartbeat"))  # noqa: S108
+
+
+def start_maintenance(services: Services) -> list[asyncio.Task[None]]:
+    """Heartbeat (container healthcheck), config hot reload, daily database purge."""
+
+    async def heartbeat() -> None:
+        while True:
+            with contextlib.suppress(OSError):
+                HEARTBEAT.write_text(str(time.time()), encoding="utf-8")  # noqa: ASYNC240 (tiny tmpfs write)
+            await asyncio.sleep(15)
+
+    async def watch_config() -> None:
+        while True:
+            await asyncio.sleep(5)
+            try:
+                if services.store.reload_if_changed():
+                    log.info("config.yaml changed on disk: reloaded")
+            except ConfigError as exc:
+                log.error("config.yaml changed but is invalid, keeping the previous one: %s", exc)
+
+    async def purge() -> None:
+        while True:
+            days = services.cfg.store.retention_days
+            if days > 0:
+                try:
+                    counts = await services.db.purge(days)
+                    if any(counts.values()):
+                        log.info("database purge (> %d days): %s", days, counts)
+                except Exception:
+                    log.exception("database purge failed")
+            await asyncio.sleep(24 * 3600)
+
+    return [
+        asyncio.create_task(heartbeat(), name="heartbeat"),
+        asyncio.create_task(watch_config(), name="config-watch"),
+        asyncio.create_task(purge(), name="db-purge"),
+    ]
+
+
 async def close_services(services: Services) -> None:
     if services.stt:
         await services.stt.aclose()
@@ -315,6 +357,7 @@ async def run(config_path: str) -> None:
 
     await start_jobs(services)
     await start_proactive(services)
+    maintenance = start_maintenance(services)
     if gateway is not None:
         await gateway.start()
 
@@ -346,4 +389,6 @@ async def run(config_path: str) -> None:
     for t in tasks:
         with contextlib.suppress(Exception):
             await asyncio.wait_for(t, timeout=5)
+    for task in maintenance:
+        task.cancel()
     await close_services(services)

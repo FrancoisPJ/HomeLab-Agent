@@ -130,6 +130,25 @@ class ConfigStore:
         self.path = Path(path)
         self._config = config if config is not None else load_config(self.path)
         self._listeners: list[Listener] = []
+        self.mtime = self._current_mtime()
+
+    def _current_mtime(self) -> float:
+        try:
+            return self.path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    def reload_if_changed(self) -> bool:
+        """Reload when the file was modified outside the agent (hand edit).
+
+        Raises ConfigError (and keeps the current config) when the new file is invalid.
+        """
+        current = self._current_mtime()
+        if current == self.mtime:
+            return False
+        self.mtime = current  # do not retry an invalid file until it changes again
+        self.reload()
+        return True
 
     @property
     def config(self) -> AppConfig:
@@ -154,6 +173,7 @@ class ConfigStore:
         """Validate then persist a full YAML document (panel editor)."""
         cfg = parse_config(text)
         atomic_write(self.path, text)
+        self.mtime = self._current_mtime()
         self._config = cfg
         self._publish()
         return cfg

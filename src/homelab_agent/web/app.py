@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +30,8 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent
 SUGGESTED_CONFIRM_DOMAINS = ["lock", "alarm_control_panel", "cover"]
+LOGIN_MAX_FAILURES = 5
+LOGIN_WINDOW_S = 300
 
 
 class PanelSecretMissing(SystemExit):
@@ -84,10 +88,25 @@ def create_app(services: Services) -> FastAPI:
     async def login_form(request: Request) -> HTMLResponse:
         return render(request, "login.html", error=None)
 
+    failures: dict[str, list[float]] = {}
+
     @app.post("/login")
     async def login(request: Request, password_field: str = Form(alias="password")) -> Response:
+        client = request.client.host if request.client else "?"
+        now = time.monotonic()
+        recent = [t for t in failures.get(client, []) if now - t < LOGIN_WINDOW_S]
+        failures[client] = recent
+        if len(recent) >= LOGIN_MAX_FAILURES:
+            blocked = render(
+                request, "login.html", error="Trop d'essais : réessaie dans 5 minutes."
+            )
+            blocked.status_code = 429
+            return blocked
         if not check_password(password(), password_field):
+            recent.append(now)
+            await asyncio.sleep(0.5)  # slow down guessing
             return render(request, "login.html", error="Mot de passe incorrect.")
+        failures.pop(client, None)
         resp = RedirectResponse("/", status_code=303)
         resp.set_cookie(
             COOKIE, make_session(password()), httponly=True, samesite="strict", max_age=7 * 86400

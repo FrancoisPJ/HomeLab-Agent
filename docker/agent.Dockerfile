@@ -39,6 +39,6 @@ WORKDIR /app
 VOLUME ["/data"]
 EXPOSE 8099
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8099/healthz', timeout=4)" || exit 1
+  CMD homelab-agent healthcheck || exit 1
 ENTRYPOINT ["homelab-agent"]
 CMD ["run"]

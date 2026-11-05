@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -84,6 +85,7 @@ class OpenAICompatClient(LLMBackend):
         self.cfg = cfg
         self.max_context = cfg.max_context
         self.max_output_tokens = cfg.max_output_tokens
+        self._slots = asyncio.Semaphore(cfg.concurrency)  # requests in flight at once
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = httpx.AsyncClient(
             base_url=cfg.url.rstrip("/"),
@@ -112,7 +114,8 @@ class OpenAICompatClient(LLMBackend):
 
     async def _post(self, payload: dict[str, Any]) -> httpx.Response:
         try:
-            resp = await self._client.post("/chat/completions", json=payload)
+            async with self._slots:
+                resp = await self._client.post("/chat/completions", json=payload)
         except httpx.TimeoutException as exc:
             raise BackendTimeout(f"{self.name}: timeout") from exc
         except httpx.TransportError as exc:
@@ -184,7 +187,10 @@ class OpenAICompatClient(LLMBackend):
         finish: str | None = None
         model = self.model
         try:
-            async with self._client.stream("POST", "/chat/completions", json=payload) as resp:
+            async with (
+                self._slots,
+                self._client.stream("POST", "/chat/completions", json=payload) as resp,
+            ):
                 if resp.status_code >= 400:
                     await resp.aread()
                     self._raise_for_status(resp)

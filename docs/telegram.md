@@ -39,7 +39,8 @@ Les erreurs « réessayer après N s » sont respectées. Les réponses longues 
 ## Confirmations
 
 Pour une action soumise à confirmation, le bot envoie la question avec deux boutons **✅ Oui /
-❌ Non**. Sans réponse après `confirm_timeout_s`, c'est un non.
+❌ Non**. Seul l'auteur de la demande peut répondre (utile dans un groupe). Sans réponse après
+`confirm_timeout_s`, c'est un non.
 
 ## Messages vocaux
 

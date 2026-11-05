@@ -21,6 +21,27 @@ def schema_json() -> str:
     return json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
 
 
+def healthcheck(cfg: AppConfig, max_age_s: float = 90) -> int:
+    """Web panel answering /healthz, or (panel disabled) a fresh heartbeat file."""
+    import time
+    import urllib.request
+
+    if cfg.web.enabled:
+        try:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{cfg.web.port}/healthz", timeout=4
+            ) as resp:
+                return 0 if resp.status == 200 else 1
+        except OSError:
+            return 1
+    from homelab_agent.app import HEARTBEAT
+
+    try:
+        return 0 if time.time() - HEARTBEAT.stat().st_mtime < max_age_s else 1
+    except OSError:
+        return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="homelab-agent")
     parser.add_argument("-c", "--config", default=DEFAULT_CONFIG, help="path to config.yaml")
@@ -32,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     p_eng = sub.add_parser("render-engines", help="write llama-swap configs from models:")
     p_eng.add_argument("-o", "--output", default="engines", help="output directory")
     sub.add_parser("models", help="list models to download (TSV: repo, file, sha256)")
+    sub.add_parser("healthcheck", help="exit 0 when the running agent is healthy (Docker)")
     p_fake = sub.add_parser("fake", help="run a fake service (tests / dev)")
     p_fake.add_argument("service", choices=["llm", "ha", "telegram", "stt"])
     p_fake.add_argument("--port", type=int, default=8080)
@@ -80,6 +102,8 @@ def main(argv: list[str] | None = None) -> int:
         for env in missing:
             print(f"warning: environment variable {env} is not set")
         return 0
+    if args.cmd == "healthcheck":
+        return healthcheck(cfg)
     if args.cmd == "render-engines":
         from homelab_agent.engines import write_engine_configs
 

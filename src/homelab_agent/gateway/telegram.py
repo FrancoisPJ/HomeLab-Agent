@@ -115,9 +115,12 @@ class StreamEditor:
 
 
 class TelegramReplier:
-    def __init__(self, frontend: TelegramFrontend, chat_id: str) -> None:
+    def __init__(
+        self, frontend: TelegramFrontend, chat_id: str, user_id: str | None = None
+    ) -> None:
         self.f = frontend
         self.chat_id = chat_id
+        self.user_id = user_id  # who must answer confirmations (None: anyone allowed)
 
     async def send(self, text: str) -> None:
         for chunk in split_text(text, self.f.cfg().max_message_chars):
@@ -134,7 +137,7 @@ class TelegramReplier:
         )
 
     async def confirm(self, question: str) -> bool:
-        return await self.f.ask_confirmation(self.chat_id, question)
+        return await self.f.ask_confirmation(self.chat_id, question, self.user_id)
 
 
 Handler = Callable[[IncomingMessage, Replier], Awaitable[None]]
@@ -171,7 +174,7 @@ class TelegramFrontend:
         self.commands = commands or {}
         self.voice = voice
         self.stt = stt
-        self._pending: dict[str, tuple[str, asyncio.Future[bool]]] = {}
+        self._pending: dict[str, tuple[str, asyncio.Future[bool], str | None]] = {}
         self._actions: dict[str, tuple[str, ActionButton, float]] = {}
 
     def help_text(self) -> str:
@@ -213,7 +216,7 @@ class TelegramFrontend:
             log.warning("ignored message from non-allowlisted user %s", user_id)
             return  # silent refusal
         chat = str(chat_id)
-        replier = TelegramReplier(self, chat)
+        replier = TelegramReplier(self, chat, str(user_id))
         text = (text or "").strip()
         if not text:
             return
@@ -261,7 +264,7 @@ class TelegramFrontend:
             METRICS.inc("telegram_rejected_total")
             log.warning("ignored voice message from non-allowlisted user %s", user_id)
             return
-        replier = TelegramReplier(self, str(chat_id))
+        replier = TelegramReplier(self, str(chat_id), str(user_id))
         section = self.voice() if self.voice else None
         if section is None or not section.enabled or self.stt is None:
             await replier.send("🎤 Les messages vocaux ne sont pas activés (voice.enabled).")
@@ -299,10 +302,12 @@ class TelegramFrontend:
             await replier.send("❌ Erreur interne, voir les journaux.")
 
     # -------------------------------------------------------- confirmations
-    async def ask_confirmation(self, chat_id: str, question: str) -> bool:
+    async def ask_confirmation(
+        self, chat_id: str, question: str, user_id: str | None = None
+    ) -> bool:
         token = uuid.uuid4().hex[:12]
         fut: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
-        self._pending[token] = (chat_id, fut)
+        self._pending[token] = (chat_id, fut, user_id)
         msg_id = await self.api.send_message(
             chat_id, question, buttons=[("✅ Oui", f"cf:{token}:y"), ("❌ Non", f"cf:{token}:n")]
         )
@@ -336,6 +341,11 @@ class TelegramFrontend:
         pending = self._pending.get(parts[1])
         if pending is None or pending[0] != str(chat_id) or pending[1].done():
             await self.api.answer_callback(callback_id, "Demande expirée.")
+            return
+        if pending[2] is not None and pending[2] != str(user_id):
+            await self.api.answer_callback(
+                callback_id, "Seul l'auteur de la demande peut répondre."
+            )
             return
         yes = parts[2] == "y"
         pending[1].set_result(yes)

@@ -47,6 +47,12 @@ class AgentOutcome:
     escalation: dict[str, str] | None = None
     tool_failures: int = 0
     finished: bool = False
+    actions: list[str] = field(default_factory=list)  # successful action tools, for history
+
+    def history_text(self) -> str:
+        if not self.actions:
+            return self.text
+        return f"{self.text}\n[actions effectuées : {'; '.join(self.actions)}]"
 
 
 class _NullStream:
@@ -198,7 +204,7 @@ class Orchestrator:
                 )  # fmt: skip
                 return
         if outcome.text:
-            await self.db.add_message(msg.chat_id, "assistant", outcome.text)
+            await self.db.add_message(msg.chat_id, "assistant", outcome.history_text())
 
     async def _account(
         self,
@@ -346,6 +352,8 @@ class Orchestrator:
                     return outcome
                 if not r.ok and r.outcome == "error":
                     outcome.tool_failures += 1
+                if r.ok and tool is not None and "action" in tool.tags:
+                    outcome.actions.append(f"{call.name} {call.arguments_json()}"[:200])
                 messages.append(Message("tool", r.to_text(), tool_call_id=call.id, name=call.name))
             if outcome.tool_failures >= max_failures and tier == Tier.GPU:
                 await stream.finish("⚠️ Les outils échouent, je passe la main…")
@@ -368,5 +376,5 @@ class Orchestrator:
             self.router.health.mark_down(backend.name)
             raise
         await self._account(chat_id, backend, Tier.CPU, outcome.usage, start, replier)
-        await self.db.add_message(chat_id, "assistant", outcome.text)
+        await self.db.add_message(chat_id, "assistant", outcome.history_text())
         return outcome.text

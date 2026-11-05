@@ -38,6 +38,16 @@ Le message ne tient pas dans le contexte du modèle rapide (`max_context`) : il 
 suivant. Pour des messages longs fréquents, augmentez `ctx_size` du modèle et `max_context` du backend
 (plus de VRAM), ou laissez faire le CPU.
 
+## « … is a blocked service » / « needs explicit entity_id targets »
+
+Protection voulue : voir « Services bloqués » et « Cible obligatoire » dans
+[home-assistant.md](home-assistant.md). Débloquez un service précis avec `allowed_services`.
+
+## « Trop d'essais » sur le panneau
+
+Après 5 mots de passe faux en 5 minutes depuis la même adresse, la connexion est refusée pendant
+5 minutes.
+
 ## Le panneau refuse de démarrer
 
 `Refusing to start the web panel: set PANEL_PASSWORD` : définissez `PANEL_PASSWORD` (8 caractères

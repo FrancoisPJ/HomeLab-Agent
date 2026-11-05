@@ -90,6 +90,11 @@ class FakeHA:
             q.put_nowait(event)
         return self.states[entity_id]
 
+    def emit(self, event_type: str, data: dict[str, Any] | None = None) -> None:
+        """Test hook: send any event to the websocket subscribers."""
+        for q in self.subscribers:
+            q.put_nowait({"_event_type": event_type, **(data or {})})
+
     def call(self, domain: str, service: str, data: dict[str, Any]) -> list[dict[str, Any]]:
         self.calls.append({"domain": domain, "service": service, "data": data})
         targets = data.get("entity_id") or []
@@ -192,9 +197,10 @@ def create_app() -> FastAPI:
             while True:
                 event = await queue.get()
                 if sub_id is not None:
+                    etype = event.pop("_event_type", "state_changed")
                     await ws.send_json(
                         {"id": sub_id, "type": "event",
-                         "event": {"event_type": "state_changed", "data": event}}
+                         "event": {"event_type": etype, "data": event}}
                     )  # fmt: skip
 
         pump_task = asyncio.create_task(pump())

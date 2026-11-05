@@ -53,8 +53,19 @@ home_assistant:
 ```
 
 Une action vers une zone (`area_id`) est développée en entités, et **chacune** est vérifiée. Les
-services sans cible (`notify.*`) sont vérifiés au niveau du domaine. Les cibles placées dans `data`
-sont refusées.
+cibles placées dans `data` sont refusées.
+
+**Cible obligatoire.** Un service doit viser des entités explicites, sinon il est refusé : un appel
+sans cible pourrait, selon la version de Home Assistant, toucher plusieurs entités sans que leurs
+règles soient consultées. Exceptions : les domaines de `untargeted_domains` (`notify`, `tts`,
+`persistent_notification`), vérifiés au niveau du domaine.
+
+**Services bloqués.** Certains services d'administration ne sont **jamais** accessibles à l'agent,
+quelles que soient les permissions : `hassio.*` (dont l'arrêt de la machine), `homeassistant.restart`
+/ `stop` / `reload_all` / `set_location`, `recorder.*`, `shell_command.*`, `python_script.*`,
+`pyscript.*`, `backup.*`, `update.install`, `system_log.*`, `logger.*`. La liste est
+`blocked_services` ; pour en autoriser un précisément : `allowed_services: [backup.create]` (et, s'il
+n'a pas de cible, ajouter son domaine à `untargeted_domains`).
 
 Le panneau web (page **Permissions**) affiche l'arbre domaines → entités avec la permission effective
 et sa raison, et permet de régler chaque entité ; c'est écrit dans `config.yaml` et appliqué sans

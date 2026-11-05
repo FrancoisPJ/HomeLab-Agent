@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -153,6 +153,28 @@ class Database:
 
     async def close(self) -> None:
         await self.engine.dispose()
+
+    # ------------------------------------------------------------ retention
+    async def purge(self, older_than_days: int, now: datetime | None = None) -> dict[str, int]:
+        """Delete old rows; cloud spend is kept at least 400 days (monthly budgets)."""
+        now = (now or datetime.now(UTC)).astimezone(UTC).replace(tzinfo=None)
+        cutoff = now - timedelta(days=older_than_days)
+        spend_cutoff = now - timedelta(days=max(older_than_days, 400))
+        counts: dict[str, int] = {}
+        async with self.session() as s, s.begin():
+            for name, stmt in (
+                ("chat_messages", delete(ChatMessage).where(ChatMessage.created_at < cutoff)),
+                ("interactions", delete(Interaction).where(Interaction.created_at < cutoff)),
+                ("audit", delete(AuditEntry).where(AuditEntry.created_at < cutoff)),
+                (
+                    "jobs",
+                    delete(Job).where(Job.updated_at < cutoff, Job.status.in_(["done", "failed"])),
+                ),
+                ("spend", delete(Spend).where(Spend.created_at < spend_cutoff)),
+            ):
+                res = await s.execute(stmt)
+                counts[name] = int(getattr(res, "rowcount", 0) or 0)
+        return counts
 
     # ------------------------------------------------------------ history
     async def add_message(self, chat_id: str, role: str, content: str) -> None:

@@ -72,10 +72,14 @@ class OpenAICompatBackend(_BackendBase):
     url: str = Field(description="Base URL including /v1, e.g. http://llama-gpu:8080/v1")
     api_key_env: str | None = None
     max_context: int = Field(4096, ge=512)
-    concurrency: int = Field(1, ge=1, le=16)
+    concurrency: int = Field(
+        1, ge=1, le=16, description="Requests sent at once (match the model's `parallel`)."
+    )
 
 
 class AnthropicBackend(_BackendBase):
+    """Note: the current Messages API ignores `temperature`; it is not sent."""
+
     kind: Literal["anthropic"] = "anthropic"
     tier: Tier = Tier.CLOUD
     api_key_env: str = "ANTHROPIC_API_KEY"
@@ -314,6 +318,12 @@ class ModelsSection(_Base):
 
 class StoreSection(_Base):
     path: str = "./data/agent.db"
+    retention_days: int = Field(
+        180,
+        ge=0,
+        description="Delete conversations, interactions, audit entries and finished jobs "
+        "older than this (0 = keep forever). Cloud spend is kept at least 400 days.",
+    )
 
 
 # --------------------------------------------------------------------------- voice

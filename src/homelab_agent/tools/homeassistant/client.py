@@ -18,6 +18,12 @@ import websockets
 
 log = logging.getLogger(__name__)
 
+REGISTRY_EVENTS = (
+    "area_registry_updated",
+    "entity_registry_updated",
+    "device_registry_updated",
+)
+
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f  ]")
 
 
@@ -237,6 +243,8 @@ class HomeAssistantClient:
             states = await command({"type": "get_states"})
             self.cache.load(states, areas, entities, devices)
             await command({"type": "subscribe_events", "event_type": "state_changed"})
+            for registry in REGISTRY_EVENTS:
+                await command({"type": "subscribe_events", "event_type": registry})
             self.connected = True
             log.info("home assistant websocket connected (%d entities)", len(self.cache.entities))
             async for raw in ws:
@@ -244,7 +252,12 @@ class HomeAssistantClient:
                     break
                 msg = json.loads(raw)
                 if msg.get("type") == "event":
-                    data = msg["event"].get("data", {})
+                    event = msg["event"]
+                    if event.get("event_type") in REGISTRY_EVENTS:
+                        # areas / entities / devices changed: reload everything
+                        log.info("home assistant %s: refreshing", event.get("event_type"))
+                        return
+                    data = event.get("data", {})
                     self.cache.apply_state(data.get("new_state"), data.get("entity_id"))
 
     async def _ws_loop(self) -> None:
@@ -252,7 +265,7 @@ class HomeAssistantClient:
         while not self._stop.is_set():
             try:
                 await self._ws_session()
-                delay = 1.0
+                delay = 0.5  # session ended on purpose (registry refresh): reconnect quickly
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

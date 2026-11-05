@@ -69,6 +69,11 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
+class MaskingTextFormatter(logging.Formatter):
+    def formatException(self, ei: Any) -> str:
+        return MASKER.mask(super().formatException(ei))
+
+
 def setup_logging(level: str = "info", fmt: str = "json") -> None:
     root = logging.getLogger()
     root.handlers.clear()
@@ -77,7 +82,9 @@ def setup_logging(level: str = "info", fmt: str = "json") -> None:
     if fmt == "json":
         handler.setFormatter(JsonFormatter())
     else:
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        handler.setFormatter(
+            MaskingTextFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        )
     root.addHandler(handler)
     root.setLevel(level.upper())
     for noisy in ("httpx", "httpcore", "aiogram.event", "websockets"):
