@@ -23,6 +23,7 @@ Réponse visée sous 7 jours. Seule la dernière version publiée reçoit des co
 | Moteurs llama.cpp / whisper / TTS | aucune authentification : jamais publiés hors du réseau Compose |
 | Caméras | désactivées par défaut ; caméra soumise aux permissions de lecture ; image envoyée seulement à la conversation qui la demande, jamais à un modèle (local ou cloud) ; limite par minute ; journal d'audit |
 | Actions Home Assistant | moteur de permissions dans le code (pas dans le prompt), cible explicite obligatoire, services d'administration bloqués, confirmation Oui/Non configurable, journal d'audit |
+| Recherche Internet (`web_tools`) | désactivée par défaut ; outils web réservés aux niveaux CPU/cloud, qui n'ont **aucun** outil Home Assistant (séparation par niveau, appels hors liste refusés) ; `web_fetch` limité à `http(s)` vers des adresses publiques vérifiées (pas de localhost, LAN, métadonnées ; DNS vérifié une seule fois, redirections revérifiées), taille et durée limitées ; SearXNG sans port publié |
 | Injection d'instructions | les données Home Assistant / web sont nettoyées et marquées comme données ; les routines et la mémoire créées depuis une conversation sont visibles et ne peuvent pas écrire de `${…}` dans la config |
 | Secrets | uniquement en variables d'environnement, masqués dans les journaux, gitleaks en CI |
 | Chaîne d'approvisionnement | versions épinglées, empreintes SHA256 vérifiées (modèles, llama-swap), commits de llama.cpp / whisper.cpp vérifiés, Dependabot, CodeQL, scan d'images |

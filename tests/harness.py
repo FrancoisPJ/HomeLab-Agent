@@ -30,8 +30,11 @@ from homelab_agent.tools.homeassistant.client import HomeAssistantClient
 from homelab_agent.tools.homeassistant.permissions import PermissionEngine
 from homelab_agent.tools.homeassistant.tools import HomeAssistantService, register_ha_tools
 from homelab_agent.tools.registry import ToolRegistry, escalate_tool
+from homelab_agent.tools.web import WebClient, register_web_tools
 
 from .conftest import base_config
+from .fake_web import create_app as fake_web_app
+from .fake_web import resolver as fake_resolver
 
 
 class RecordingNotifier:
@@ -90,6 +93,7 @@ class Harness:
     jobs: JobQueue
     scheduler: RoutineScheduler
     routines: RoutineManager
+    web_app: Any = None
 
     @property
     def ha_calls(self) -> list[dict[str, Any]]:
@@ -144,6 +148,13 @@ async def build_harness(tmp_path: Path, **overrides: Any) -> Harness:
     notifier = RecordingNotifier()
     registry = ToolRegistry()
     registry.register(escalate_tool())
+    web_app = fake_web_app()
+    web = WebClient(
+        lambda: store.config.web_tools,
+        transport=httpx.ASGITransport(app=web_app),
+        resolver=fake_resolver,
+    )
+    register_web_tools(registry, web, lambda: store.config.web_tools.enabled)
     ha_app = fake_ha_app()
     client = HomeAssistantClient("http://ha", "token", transport=httpx.ASGITransport(app=ha_app))
     fake = ha_app.state.ha
@@ -169,5 +180,6 @@ async def build_harness(tmp_path: Path, **overrides: Any) -> Harness:
     jobs = JobQueue(db, orch.run_job, notifier, poll_interval_s=0.05, retry_delay_s=0.01)
     orch.jobs = jobs
     return Harness(
-        store, db, llm_apps, ha_app, backends, router, orch, ha, notifier, jobs, scheduler, manager
-    )
+        store, db, llm_apps, ha_app, backends, router, orch, ha, notifier, jobs, scheduler, manager,
+        web_app,
+    )  # fmt: skip

@@ -36,6 +36,19 @@ def _markup(buttons: Buttons | None) -> InlineKeyboardMarkup | None:
     )
 
 
+def _attachment(message: TgMessage) -> tuple[str | None, str | None]:
+    """(kind, file name) of a photo or file the agent cannot read yet; (None, None) else."""
+    if message.photo:
+        return "photo", None
+    if message.document is not None:
+        return "document", message.document.file_name
+    for kind in ("video", "audio", "animation", "video_note"):
+        media = getattr(message, kind, None)
+        if media is not None:
+            return kind, getattr(media, "file_name", None)
+    return None, None
+
+
 class AiogramBotApi:
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
@@ -121,9 +134,14 @@ class TelegramGateway(Gateway):
                     v.mime_type or "audio/ogg",
                 )  # fmt: skip
                 return
-            if message.text is None:
+            if message.text is not None:
+                await front.on_message(message.from_user.id, message.chat.id, message.text)
                 return
-            await front.on_message(message.from_user.id, message.chat.id, message.text)
+            kind, name = _attachment(message)
+            if kind is not None:
+                await front.on_attachment(
+                    message.from_user.id, message.chat.id, kind, message.caption or "", name
+                )
 
         @self.dp.callback_query()
         async def on_callback(query: CallbackQuery) -> None:

@@ -289,6 +289,18 @@ class HomeAssistantSection(_Base):
         ]
     )  # fmt: skip
     request_timeout_s: float = Field(10, gt=0)
+    services_max_chars: int = Field(
+        1200,
+        ge=0,
+        description="Size limit of the service catalogue (domain: service(fields)) shown to "
+        "the model for context_domains (0 = not shown).",
+    )
+    service_validation: Literal["off", "services", "fields"] = Field(
+        "fields",
+        description="Check ha_call_service against the catalogue of Home Assistant before "
+        "calling it: off; services = unknown domain/service refused; fields = also unknown "
+        "data fields (when the service declares its fields).",
+    )
     cameras: CameraSection = Field(default_factory=CameraSection)
 
 
@@ -368,6 +380,68 @@ class StoreSection(_Base):
         ge=0,
         description="Delete conversations, interactions, audit entries and finished jobs "
         "older than this (0 = keep forever). Cloud spend is kept at least 400 days.",
+    )
+
+
+# --------------------------------------------------------------------------- tools
+#: tags of the house tools (Home Assistant, cameras, routines, memory edits, escalation)
+HOME_TOOL_TAGS = [
+    "ha", "action", "camera", "routines", "routine_edit", "memory", "memory_edit", "internal",
+]  # fmt: skip
+
+
+class ToolsSection(_Base):
+    """Tool families offered to each tier, by tag.
+
+    A tool is offered to a tier only when *every* tag of the tool is listed for that tier
+    (a tool with a new, unlisted tag is therefore hidden by default). Tags: ha (read Home
+    Assistant), action (act on the house), camera, routines, routine_edit, memory,
+    memory_edit, internal (escalate), web (web_search / web_fetch).
+    """
+
+    gpu: list[str] = Field(
+        default_factory=lambda: list(HOME_TOOL_TAGS),
+        description="House model: Home Assistant, cameras, routines, memory, escalation.",
+    )
+    cpu: list[str] = Field(
+        default_factory=lambda: ["web", "memory"],
+        description="Deep model: Internet (web_*) and reading memories, no Home Assistant.",
+    )
+    cloud: list[str] = Field(
+        default_factory=lambda: ["web", "memory"],
+        description="Cloud model: same as cpu by default (no Home Assistant).",
+    )
+
+    def allowed(self, tier: Tier) -> set[str]:
+        return set(getattr(self, tier.value))
+
+    def allows(self, tier: Tier, tags: set[str]) -> bool:
+        return tags <= self.allowed(tier)
+
+
+class WebToolsSection(_Base):
+    """web_search (self-hosted SearXNG) and web_fetch, for the tiers that have the web tag."""
+
+    enabled: bool = False
+    searxng_url: str = Field(
+        "http://searxng:8080",
+        pattern=r"^https?://[^\s\"'<>]+$",
+        description="SearXNG base URL (JSON format must be enabled). Internal network only.",
+    )
+    language: str = Field("fr", description="Search language sent to SearXNG.")
+    safesearch: Literal[0, 1, 2] = 1
+    max_results: int = Field(5, ge=1, le=20)
+    timeout_s: float = Field(15, gt=0, le=120, description="Per search / per fetched page.")
+    fetch_max_bytes: int = Field(
+        2_000_000, ge=10_000, le=20_000_000, description="Largest page downloaded."
+    )
+    fetch_max_chars: int = Field(
+        6000, ge=500, le=50_000, description="Readable text returned to the model per page."
+    )
+    max_redirects: int = Field(3, ge=0, le=10)
+    blocked_domains: list[str] = Field(
+        default_factory=list,
+        description="Hosts never fetched (globs, e.g. *.example.com), on top of private IPs.",
     )
 
 
@@ -572,6 +646,8 @@ class AppConfig(_Base):
     proactive: ProactiveSection = Field(default_factory=ProactiveSection)
     voice: VoiceSection = Field(default_factory=VoiceSection)
     memory: MemorySection = Field(default_factory=MemorySection)
+    tools: ToolsSection = Field(default_factory=ToolsSection)
+    web_tools: WebToolsSection = Field(default_factory=WebToolsSection)
     models: ModelsSection = Field(default_factory=ModelsSection)
     store: StoreSection = Field(default_factory=StoreSection)
 

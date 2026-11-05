@@ -1,0 +1,31 @@
+# SearXNG pour homelab-agent (profil Compose `web`) : moteur de recherche auto-hébergé,
+# interrogé par l'outil web_search du modèle CPU. Joignable seulement sur le réseau Compose
+# (aucun port publié). Clé secrète : variable SEARXNG_SECRET du fichier .env.
+use_default_settings: true
+
+general:
+  instance_name: homelab-agent
+  enable_metrics: false
+
+server:
+  # remplacée par la variable d'environnement SEARXNG_SECRET (voir docker-compose.yml)
+  secret_key: "change-me-searxng"
+  limiter: false          # instance privée : pas de limiteur (il demanderait Valkey)
+  public_instance: false
+  image_proxy: false
+  method: GET
+
+search:
+  safe_search: 1
+  default_lang: fr
+  autocomplete: ""
+  formats:
+    - html
+    - json                # indispensable : l'agent lit les résultats en JSON
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 10.0

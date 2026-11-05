@@ -351,3 +351,52 @@ async def test_action_buttons_are_one_shot_and_expire() -> None:
     now[0] = 61
     await f.on_callback(111, 111, "cb3", data2)
     assert calls == ["111"]
+
+
+async def test_photos_and_files_get_a_clear_answer() -> None:
+    from homelab_agent.gateway.telegram import ATTACHMENT_REPLY
+
+    bot = FakeBot()
+    f = frontend(bot)
+    await f.on_attachment(111, 111, "photo")
+    assert bot.texts() == [ATTACHMENT_REPLY]
+    assert f.received == []  # type: ignore[attr-defined]
+    # a caption is still a request, with a short note for the model
+    await f.on_attachment(111, 111, "document", "/résume ce fichier", "factures\nmai.csv")
+    msg = f.received[0]  # type: ignore[attr-defined]
+    assert msg.text.startswith("résume ce fichier\n\n[Note : l'utilisateur a joint un fichier")
+    assert "« factures mai.csv »" in msg.text
+    await f.on_attachment(111, 111, "photo", "c'est quoi ?")
+    assert "joint une photo que tu ne peux pas voir" in f.received[1].text  # type: ignore[attr-defined]
+    assert bot.texts().count(ATTACHMENT_REPLY) == 3
+    # strangers: silence
+    bot.ops.clear()
+    await f.on_attachment(999, 999, "photo", "salut")
+    assert bot.ops == []
+
+
+def test_aiogram_attachment_kinds() -> None:
+    from datetime import UTC, datetime
+
+    from aiogram.types import Chat, Document, PhotoSize, Sticker, Video
+    from aiogram.types import Message as TgMessage
+
+    from homelab_agent.gateway.aiogram_adapter import _attachment
+
+    base = {"message_id": 1, "date": datetime.now(UTC), "chat": Chat(id=1, type="private")}
+    photo = TgMessage(**base, photo=[PhotoSize(file_id="p", file_unique_id="p", width=1, height=1)])
+    assert _attachment(photo) == ("photo", None)
+    doc = TgMessage(**base, document=Document(file_id="d", file_unique_id="d", file_name="a.csv"))
+    assert _attachment(doc) == ("document", "a.csv")
+    video = TgMessage(
+        **base, video=Video(file_id="v", file_unique_id="v", width=1, height=1, duration=1)
+    )
+    assert _attachment(video) == ("video", None)
+    sticker = TgMessage(
+        **base,
+        sticker=Sticker(
+            file_id="s", file_unique_id="s", type="regular", width=1, height=1,
+            is_animated=False, is_video=False,
+        ),
+    )  # fmt: skip
+    assert _attachment(sticker) == (None, None)

@@ -35,6 +35,7 @@ HELP = {
     "telegram_rejected_total": "Telegram messages ignored (user not in the allowlist).",
     "voice_messages_total": "Voice notes transcribed.",
     "voice_replies_total": "Voice replies synthesized.",
+    "telegram_attachments_total": "Photos and files received (not readable yet), by kind.",
     "backend_up": "1 when the backend is considered healthy.",
     "home_assistant_connected": "1 when the Home Assistant websocket is connected.",
     "home_assistant_entities": "Entities in the Home Assistant cache.",

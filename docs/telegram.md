@@ -76,6 +76,13 @@ Pour une action soumise à confirmation, le bot envoie la question avec deux bou
 Avec `voice.enabled: true`, un vocal est téléchargé, transcrit en local, affiché
 (« 🎤 « … » ») puis traité comme un message écrit. Voir [voice.md](voice.md).
 
+## Photos et fichiers
+
+L'agent ne lit pas encore les photos ni les fichiers (documents, CSV, vidéos…). Il répond aussitôt
+« 📎 Je ne peux pas encore lire les photos ni les fichiers. Décris-moi ce que tu veux. ». Si la
+photo ou le fichier a une **légende**, elle est traitée comme un message, avec une courte note pour
+le modèle (« l'utilisateur a joint une photo que tu ne peux pas voir »).
+
 ## Phase 2
 
 L'interface `Gateway` (`gateway/base.py`) permet d'ajouter WhatsApp ou une entrée vocale sans toucher

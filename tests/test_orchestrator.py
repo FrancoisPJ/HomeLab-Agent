@@ -181,7 +181,27 @@ async def test_repeated_tool_failures_hand_over(tmp_path: Path) -> None:
     )
     r = BufferedReplier()
     await h.orchestrator.handle(msg('[[tool:ha_get_state {"entity_id": "sensor.inexistant"}]]'), r)
+    # house tools stay on the GPU: no other tier may use them, so no hand-over
+    assert any("Les outils échouent" in m and "404" in m for m in r.messages)
+    assert not any("passe la main" in m for m in r.messages)
+    assert await h.db.list_jobs() == []
+    await h.close()
+
+
+async def test_repeated_tool_failures_hand_over_when_allowed(tmp_path: Path) -> None:
+    h = await build_harness(
+        tmp_path,
+        routing={
+            "tiers": {"gpu": ["gpu_fast"], "cpu": ["cpu_heavy"], "cloud": ["cloud"]},
+            "fast_path": False,
+            "escalation": {"max_tool_failures": 1},
+        },
+        tools={"cpu": ["ha", "memory"]},  # the CPU tier may read the house here
+    )
+    r = BufferedReplier()
+    await h.orchestrator.handle(msg('[[tool:ha_get_state {"entity_id": "sensor.inexistant"}]]'), r)
     assert any("passe la main" in m for m in r.messages)
+    assert any("tâche #" in m for m in r.messages)
     await h.close()
 
 

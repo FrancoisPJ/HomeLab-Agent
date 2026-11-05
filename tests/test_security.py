@@ -84,8 +84,12 @@ async def test_confirmation_required_and_declined(tmp_path: Path) -> None:
 
 
 async def test_cloud_requests_go_through_same_enforcement(tmp_path: Path) -> None:
+    # by default the cloud has no house tool at all (see test_tool_tiers); when the config
+    # gives it some, the same permission engine applies
     h = await build_harness(
-        tmp_path, home_assistant={"url": "http://ha", "rules": [{"domain": "lock", "mode": "deny"}]}
+        tmp_path,
+        home_assistant={"url": "http://ha", "rules": [{"domain": "lock", "mode": "deny"}]},
+        tools={"cloud": ["ha", "action"]},
     )
     r = BufferedReplier(auto_confirm=True)
     from homelab_agent.config.models import Tier

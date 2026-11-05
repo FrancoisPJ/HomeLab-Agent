@@ -27,7 +27,7 @@ def test_init_env_generates_only_local_secrets(tmp_path: Path) -> None:
         line.split("=", 1) for line in env.read_text(encoding="utf-8").splitlines()
         if line and not line.startswith("#")
     )  # fmt: skip
-    for key in ("PANEL_PASSWORD", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD"):
+    for key in ("PANEL_PASSWORD", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD", "SEARXNG_SECRET"):
         assert len(values[key]) >= 16 and "change-me" not in values[key], key
     assert values["PANEL_PASSWORD"] != values["METRICS_TOKEN"]
     # tokens from other services are left for the user to paste

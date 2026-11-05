@@ -17,6 +17,7 @@ from homelab_agent.config.models import TelegramSection, VoiceSection
 from homelab_agent.gateway.base import ActionButton, IncomingMessage, Replier, StreamHandle
 from homelab_agent.gateway.commands import CommandTable
 from homelab_agent.observability.metrics import METRICS
+from homelab_agent.tools.homeassistant.client import sanitize_label
 from homelab_agent.voice.stt import SpeechToText, STTError
 from homelab_agent.voice.tts import TextToSpeech, TTSError, speakable
 
@@ -199,6 +200,10 @@ class TelegramReplier:
         await self.f.api.send_photo(self.chat_id, image, caption[:1024])  # Telegram caption cap
 
 
+ATTACHMENT_REPLY = (
+    "📎 Je ne peux pas encore lire les photos ni les fichiers. Décris-moi ce que tu veux."
+)
+
 Handler = Callable[[IncomingMessage, Replier], Awaitable[None]]
 #: callback handler: (user_id, chat_id, message_id, payload, callback_id)
 CallbackHandler = Callable[[str, str, int | None, str, str], Awaitable[None]]
@@ -317,6 +322,34 @@ class TelegramFrontend:
         await self._run_and_speak(
             IncomingMessage(str(user_id), str(chat_id), text), replier, spoke=True
         )
+
+    async def on_attachment(
+        self,
+        user_id: int | str,
+        chat_id: int | str,
+        kind: str,
+        caption: str = "",
+        file_name: str | None = None,
+    ) -> None:
+        """Photo or file: not readable yet. Say so; a caption is still handled as a request."""
+        if not self.is_allowed(user_id):
+            METRICS.inc("telegram_rejected_total")
+            log.warning("ignored attachment from non-allowlisted user %s", user_id)
+            return
+        METRICS.inc("telegram_attachments_total", kind=kind)
+        replier = TelegramReplier(self, str(chat_id), str(user_id))
+        await replier.send(ATTACHMENT_REPLY)
+        caption = (caption or "").strip().lstrip("/").strip()
+        if not caption:
+            return
+        what = "une photo" if kind == "photo" else "un fichier"
+        if file_name:
+            what += f" « {sanitize_label(file_name, 80)} »"
+        note = f"[Note : l'utilisateur a joint {what} que tu ne peux pas voir ; réponds au texte.]"
+        await self._run_and_speak(
+            IncomingMessage(str(user_id), str(chat_id), f"{caption}\n\n{note}"), replier,
+            spoke=False,
+        )  # fmt: skip
 
     async def _run_and_speak(self, msg: IncomingMessage, replier: Replier, spoke: bool) -> None:
         """Handle a message; answer with a voice note too when voice.reply_voice asks for it."""

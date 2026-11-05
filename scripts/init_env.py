@@ -1,7 +1,8 @@
 """Fill the secrets of a fresh .env that can be generated locally (stdlib only).
 
 Used by `make init` right after copying .env.example: placeholders and empty values of
-PANEL_PASSWORD, METRICS_TOKEN and GRAFANA_ADMIN_PASSWORD become random strings. Values
+PANEL_PASSWORD, METRICS_TOKEN, GRAFANA_ADMIN_PASSWORD and SEARXNG_SECRET become random
+strings. Values
 the user already set are never touched. Tokens given by other services (Telegram, Home
 Assistant, cloud APIs) cannot be generated and are left as they are.
 """
@@ -17,6 +18,7 @@ GENERATED = {
     "PANEL_PASSWORD": "change-me-please",
     "METRICS_TOKEN": "",
     "GRAFANA_ADMIN_PASSWORD": "change-me-grafana",
+    "SEARXNG_SECRET": "",
 }
 
 

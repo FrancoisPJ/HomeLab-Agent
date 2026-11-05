@@ -85,7 +85,10 @@ size exceeded » — la demande passe au moteur suivant (niveau voisin), sans ma
 ### `home_assistant`
 `url`, `token_env`, `verify_ssl`, `default_policy`, `rules`, `confirm`, `blocked_services`,
 `allowed_services`, `untargeted_domains`, `context_max_chars`, `context_domains`,
-`request_timeout_s`. Voir [home-assistant.md](home-assistant.md). Préférez une URL `https://` :
+`request_timeout_s`, `services_max_chars` (1200 : catalogue des services montré au modèle, 0 =
+masqué), `service_validation` (`fields` par défaut : service ou champ inconnu refusé avant l'appel ;
+`services` : seulement les services ; `off`). Voir [home-assistant.md](home-assistant.md#catalogue-des-services).
+Préférez une URL `https://` :
 en HTTP, le token transite en clair sur le réseau local.
 `cameras` (désactivé par défaut) : `enabled`, `model_tool`, `max_per_minute`, `max_per_request`,
 `max_bytes`, `timeout_s` — photos des caméras envoyées dans Telegram, jamais à un modèle. Voir
@@ -97,6 +100,30 @@ en HTTP, le token transite en clair sur le réseau local.
 `metrics_token_env` (`METRICS_TOKEN` par défaut, `null` pour désactiver) nomme la variable du jeton
 qui ouvre **uniquement** `GET /metrics` à Prometheus ; `grafana_url` (URL `http://` ou `https://`)
 ajoute un lien « Grafana » à la barre du panneau. Voir [monitoring.md](monitoring.md).
+
+### `tools`
+Outils proposés à chaque niveau, par **étiquette** : un outil n'est proposé que si **toutes** ses
+étiquettes sont listées pour ce niveau (un outil avec une étiquette nouvelle reste donc caché).
+
+| Niveau | Défaut | Effet |
+|---|---|---|
+| `gpu` | `ha, action, camera, routines, routine_edit, memory, memory_edit, internal` | modèle maison : Home Assistant, caméras, routines, mémoire, escalade |
+| `cpu` | `web, memory` | modèle profond (`/deep`) : Internet et lecture de la mémoire, **aucun accès à Home Assistant** |
+| `cloud` | `web, memory` | comme `cpu` : un service tiers n'agit pas sur la maison |
+
+Étiquettes : `ha` (lire Home Assistant), `action` (agir), `camera`, `routines` / `routine_edit`,
+`memory` / `memory_edit`, `internal` (outil `escalate`), `web` (`web_search`, `web_fetch`). Sans
+`ha`, le niveau ne reçoit pas non plus la liste des entités dans son prompt. Un appel à un outil qui
+n'est pas proposé au niveau est refusé (`denied` dans l'audit), même si le modèle l'invente.
+Conséquences : une demande sur la maison envoyée en `/deep` ou en `/cloud` ne peut pas agir, et les
+routines `tier: cpu` ne lisent pas la maison. Pour revenir à l'ancien comportement du cloud :
+`tools.cloud: [ha, action, memory, web]`. Voir [SECURITY.md](../SECURITY.md).
+
+### `web_tools`
+Recherche Internet pour les niveaux qui ont l'étiquette `web` (désactivé par défaut) :
+`enabled`, `searxng_url` (`http://searxng:8080`, profil Compose `web`), `language`, `safesearch`,
+`max_results` (5), `timeout_s` (15), `fetch_max_bytes` (2 Mo), `fetch_max_chars` (6000),
+`max_redirects` (3), `blocked_domains` (globs). Voir [Recherche Internet](#recherche-internet-web_tools).
 
 ### `memory`
 Mémoire longue : `enabled`, `max_items`, `context_max_chars`. Voir [telegram.md](telegram.md#mémoire-longue).
@@ -139,6 +166,33 @@ Après modification : `make engines` (génère `engines/llama-swap-*.yaml`), `ma
 `retention_days` (180) : chaque jour, les conversations, interactions, entrées d'audit et tâches
 terminées plus anciennes sont supprimées (0 = jamais). Les dépenses cloud sont gardées au moins 400
 jours pour les plafonds mensuels.
+
+## Recherche Internet (`web_tools`)
+
+Le modèle CPU (et le cloud) peut chercher sur Internet (`web_search`) et lire une page
+(`web_fetch`). La recherche passe par un **SearXNG auto-hébergé** : aucune clé d'API, aucun compte.
+
+1. `.env` : `SEARXNG_SECRET` (généré par `make init`, sinon `openssl rand -hex 32`).
+2. Démarrer le service : `make up PROFILE=full,web` (ou `COMPOSE_PROFILES=full,web docker compose up -d`).
+   SearXNG n'a **aucun port publié** : seul l'agent le joint, par le réseau Compose. Sa
+   configuration est `deploy/searxng/settings.yml` (format JSON activé, limiteur coupé).
+3. `config.yaml` :
+
+   ```yaml
+   web_tools:
+     enabled: true
+     searxng_url: http://searxng:8080
+   ```
+
+4. Essayer : `/deep cherche la dernière version de Home Assistant et résume les nouveautés`.
+
+Garde-fous de `web_fetch` : `http`/`https` seulement, pas d'identifiants dans l'URL ; le nom est
+résolu et **toutes** ses adresses doivent être publiques (refus de `localhost`, du réseau local,
+`10/8`, `172.16/12`, `192.168/16`, `100.64/10`, lien local et métadonnées `169.254.169.254`, IPv6
+locales…) ; la connexion part vers l'adresse vérifiée (pas de seconde résolution DNS) ; chaque
+redirection est revérifiée (3 au plus) ; taille et durée limitées ; seuls les textes (HTML, texte,
+JSON, CSV, XML) sont lus, HTML réduit au texte visible. Les résultats portent l'avertissement « données
+non fiables » et le modèle web n'a aucun outil de la maison.
 
 ## Ce qui se recharge à chaud
 

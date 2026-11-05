@@ -34,6 +34,7 @@ from homelab_agent.tools.homeassistant.client import HomeAssistantClient
 from homelab_agent.tools.homeassistant.permissions import PermissionEngine
 from homelab_agent.tools.homeassistant.tools import HomeAssistantService, register_ha_tools
 from homelab_agent.tools.registry import ToolRegistry, escalate_tool
+from homelab_agent.tools.web import WebClient, register_web_tools
 from homelab_agent.voice.stt import SpeechToText
 from homelab_agent.voice.tts import TextToSpeech
 from homelab_agent.web.chat import RoutingNotifier, WebChatHub
@@ -54,6 +55,10 @@ async def build_services(store: ConfigStore, *, start_background: bool = True) -
     router = Router(lambda: store.config, backends, health, budget)
     registry = ToolRegistry()
     registry.register(escalate_tool())
+    # offered only while web_tools.enabled, and only to the tiers with the `web` tag
+    register_web_tools(
+        registry, WebClient(lambda: store.config.web_tools), lambda: store.config.web_tools.enabled
+    )
     ha: HomeAssistantService | None = None
     if cfg.home_assistant.enabled:
         token = AppConfig.secret(cfg.home_assistant.token_env)

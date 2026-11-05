@@ -126,12 +126,17 @@ class ToolRegistry:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
-    def specs(self, *, exclude_tags: set[str] | None = None) -> list[ToolSpec]:
+    def specs(
+        self, *, exclude_tags: set[str] | None = None, allowed_tags: set[str] | None = None
+    ) -> list[ToolSpec]:
+        """Tools to offer: none of ``exclude_tags``, and every tag in ``allowed_tags`` (if set)."""
         exclude_tags = exclude_tags or set()
         return [
             t.spec
             for t in self._tools.values()
-            if not (t.tags & exclude_tags) and (t.available is None or t.available())
+            if not (t.tags & exclude_tags)
+            and (allowed_tags is None or t.tags <= allowed_tags)
+            and (t.available is None or t.available())
         ]
 
     async def execute(self, name: str, args: dict[str, Any], ctx: ToolContext) -> ToolResult:
