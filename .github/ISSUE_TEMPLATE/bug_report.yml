@@ -1,0 +1,51 @@
+name: 🐛 Bug
+description: Quelque chose ne marche pas comme prévu
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci ! **Ne colle jamais de secret** (token Telegram, token Home Assistant, clé API, mot de passe) :
+        relis les journaux avant de les joindre. Une faille de sécurité ? Voir SECURITY.md, pas un ticket public.
+  - type: textarea
+    id: what
+    attributes:
+      label: Que se passe-t-il ?
+      description: Ce que tu as fait, ce que tu attendais, ce qui s'est passé.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Partie concernée
+      options:
+        - Telegram / voix
+        - Routage / moteurs (llama.cpp, cloud)
+        - Home Assistant / permissions
+        - Alertes / routines
+        - Panneau web
+        - Docker / installation
+        - Autre
+    validations:
+      required: true
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Profil Compose
+      options: [full, cpu-only, no-gpu, dev, autre]
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: v0.1.0, ou la sortie de `git rev-parse --short HEAD`
+  - type: textarea
+    id: logs
+    attributes:
+      label: Journaux (sans secrets)
+      description: "`make logs` ou `docker compose logs agent --tail=100`"
+      render: text
+  - type: textarea
+    id: config
+    attributes:
+      label: Extrait de config.yaml utile (sans secrets)
+      render: yaml

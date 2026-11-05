@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/FrancoisPJ/HomeLab-Agent/tree/main/docs
+    about: Configuration, modèles, Home Assistant, dépannage…
+  - name: 🔒 Signaler une faille de sécurité
+    url: https://github.com/FrancoisPJ/HomeLab-Agent/security/advisories/new
+    about: En privé, pas dans un ticket public (voir SECURITY.md).

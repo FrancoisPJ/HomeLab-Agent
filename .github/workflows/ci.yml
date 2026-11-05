@@ -2,8 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches-ignore: ["dependabot/**"]   # every branch (dependabot is covered by its PRs)
   pull_request:
+  schedule:
+    - cron: "41 5 * * 3"   # weekly: catch drift in base images and dependencies
   workflow_dispatch:
 
 permissions:

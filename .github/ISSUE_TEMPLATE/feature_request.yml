@@ -1,0 +1,23 @@
+name: ✨ Idée / fonctionnalité
+description: Proposer une amélioration
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Le besoin
+      description: Quel problème du quotidien cela réglerait-il ? Un exemple de phrase que tu dirais à l'agent aide beaucoup.
+      placeholder: « quand je pars, coupe tout et préviens-moi si une fenêtre est restée ouverte »
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Une idée de solution ?
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Contraintes du projet
+      options:
+        - label: Fonctionne en local (pas de dépendance cloud obligatoire)
+        - label: Les actions passent par le moteur de permissions

@@ -1,0 +1,17 @@
+# Categories of the auto-generated release notes (labels of the merged PRs).
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: 🔒 Sécurité
+      labels: [security]
+    - title: ✨ Nouveautés
+      labels: [enhancement, feature]
+    - title: 🐛 Corrections
+      labels: [bug, fix]
+    - title: 📦 Dépendances
+      labels: [dependencies]
+    - title: 📝 Documentation
+      labels: [documentation]
+    - title: Autres changements
+      labels: ["*"]

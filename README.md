@@ -1,7 +1,10 @@
 # homelab-agent
 
 [![CI](https://github.com/FrancoisPJ/HomeLab-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/FrancoisPJ/HomeLab-Agent/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/FrancoisPJ/HomeLab-Agent/actions/workflows/codeql.yml/badge.svg)](https://github.com/FrancoisPJ/HomeLab-Agent/actions/workflows/codeql.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](pyproject.toml)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/FrancoisPJ/HomeLab-Agent)
 
 Un agent IA personnel, piloté depuis **Telegram**, qui tourne chez soi avec `docker compose`.
 Chaque demande est envoyée au moteur le plus adapté :
@@ -140,6 +143,12 @@ confirmation Oui/Non pour les serrures, alarmes et ouvrants dans le panneau.
 **Où sont mes données ?** Dans `./data/agent.db` (SQLite) sur votre machine.
 
 Plus : [docs/troubleshooting.md](docs/troubleshooting.md) · [docs/deployment.md](docs/deployment.md)
+
+## Contribuer
+
+Les contributions sont bienvenues : voir [CONTRIBUTING.md](CONTRIBUTING.md) (le devcontainer permet de
+tout lancer sans rien installer). Une faille de sécurité ? [SECURITY.md](SECURITY.md), en privé.
+Historique des versions : [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 
