@@ -102,7 +102,7 @@ Référence complète : [docs/configuration.md](docs/configuration.md). Vérific
 
 ## Commandes Telegram
 
-`/maison` (télécommande à boutons, sans LLM), `/memoire`, `/status`, `/model`, `/cloud <texte>` (forcer le cloud), `/deep <texte>` (forcer le CPU, réponse
+`/maison` (télécommande à boutons, sans LLM), `/annuler`, `/memoire`, `/status`, `/model`, `/cloud <texte>` (forcer le cloud), `/deep <texte>` (forcer le CPU, réponse
 différée), `/jobs`, `/reset`, `/alerts`, `/routines`, `/run <routine>`,
 `/routine on|off|delete <routine>`, `/help`. Tout autre message part dans l'entonnoir de routage.
 

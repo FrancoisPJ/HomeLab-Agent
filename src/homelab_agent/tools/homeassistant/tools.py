@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from fnmatch import fnmatchcase
 from typing import Any
@@ -16,6 +17,12 @@ from homelab_agent.tools.homeassistant.client import (
     sanitize_label,
 )
 from homelab_agent.tools.homeassistant.permissions import PermissionEngine
+from homelab_agent.tools.homeassistant.undo import (
+    REVERSIBLE,
+    UndoRecord,
+    UndoStore,
+    restore_service,
+)
 from homelab_agent.tools.registry import Tool, ToolContext, ToolRegistry, ToolResult
 
 _NAME_RE = re.compile(r"^[a-z0-9_]+$")
@@ -41,6 +48,7 @@ class HomeAssistantService:
         self.permissions = permissions
         self._section = get_section
         self.db = db
+        self.undo = UndoStore()
 
     @property
     def section(self) -> HomeAssistantSection:
@@ -133,11 +141,41 @@ class HomeAssistantService:
         *,
         area_ids: list[str] | None = None,
         tool_name: str = "ha_call_service",
+        record_undo: bool = True,
     ) -> ToolResult:
         params = {"domain": domain, "service": service, "entity_id": entity_ids, "data": data}
-        res = await self._act(domain, service, entity_ids, data, ctx, area_ids or [])
+        res = await self._act(domain, service, entity_ids, data, ctx, area_ids or [], record_undo)
         await self._audit(ctx, tool_name, params, res)
         return res
+
+    async def undo_last(self, ctx: ToolContext) -> ToolResult:
+        """Restore the states noted before the last action of this conversation."""
+        record = self.undo.pop(ctx.chat_id)
+        if record is None:
+            return ToolResult(False, error="rien à annuler (aucune action récente)")
+        restored: list[str] = []
+        problems: list[str] = []
+        for eid, previous in record.previous.items():
+            current = self.client.cache.entities.get(eid)
+            if current is not None and current.state == previous:
+                continue  # already back
+            domain = eid.split(".", 1)[0]
+            service = restore_service(domain, previous)
+            if service is None:
+                problems.append(f"{eid}: impossible de revenir à « {previous} »")
+                continue
+            res = await self.act(
+                domain, service, [eid], {}, ctx, tool_name="undo", record_undo=False
+            )
+            if res.ok:
+                restored.append(f"{eid} → {previous}")
+            else:
+                problems.append(f"{eid}: {res.error}")
+        if problems and not restored:
+            return ToolResult(False, error="; ".join(problems))
+        return ToolResult(
+            True, data={"undone": record.description, "restored": restored, "problems": problems}
+        )
 
     async def _act(
         self,
@@ -147,6 +185,7 @@ class HomeAssistantService:
         data: dict[str, Any],
         ctx: ToolContext,
         area_ids: list[str],
+        record_undo: bool = True,
     ) -> ToolResult:
         if not (_NAME_RE.match(domain) and _NAME_RE.match(service)):
             return ToolResult(False, error="invalid domain or service name")
@@ -196,12 +235,21 @@ class HomeAssistantService:
         payload = dict(data)
         if targets:
             payload["entity_id"] = targets
+        previous = {
+            e: self.client.cache.entities[e].state
+            for e in targets
+            if e.split(".", 1)[0] in REVERSIBLE and e in self.client.cache.entities
+        }
         try:
             changed = await self.client.call_service(domain, service, payload)
         except HAError as exc:
             return ToolResult(False, error=str(exc))
         for s in changed:
             self.client.cache.apply_state(s)
+        if record_undo and previous:
+            self.undo.push(
+                ctx.chat_id, UndoRecord(f"{domain}.{service}", previous, time.monotonic())
+            )
         return ToolResult(True, data={"called": f"{domain}.{service}", "targets": targets or None})
 
 
@@ -408,6 +456,20 @@ def register_ha_tools(registry: ToolRegistry, ha: HomeAssistantService) -> None:
                 {"ha", "action"},
             )
         )
+
+    async def undo(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+        return await ha.undo_last(ctx)
+
+    registry.register(
+        Tool(
+            "ha_undo",
+            "Undo the last home action of this conversation (restores the previous on/off, "
+            "open/closed or locked/unlocked states). Use when the user says 'annule', 'remets'.",
+            {"type": "object", "properties": {}},
+            undo,
+            {"ha"},
+        )
+    )
     registry.register(
         Tool(
             "ha_notify",

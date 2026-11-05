@@ -14,7 +14,13 @@ from homelab_agent.core import fastpath
 from homelab_agent.core.budget import BudgetManager
 from homelab_agent.core.prompts import build_system_prompt
 from homelab_agent.core.router import TIER_LABELS, Router
-from homelab_agent.gateway.base import IncomingMessage, Replier, StreamHandle
+from homelab_agent.gateway.base import (
+    ActionButton,
+    ActionReplier,
+    IncomingMessage,
+    Replier,
+    StreamHandle,
+)
 from homelab_agent.llm.base import (
     BackendError,
     BackendUnavailable,
@@ -115,7 +121,21 @@ class Orchestrator:
         )  # fmt: skip
         res = await self.ha.act(m.domain, m.service, m.entity_ids, {}, ctx, tool_name="fast_path")
         if res.ok:
-            await replier.send(f"✅ {m.domain}.{m.service} → {', '.join(m.names)}")
+            text = f"✅ {m.domain}.{m.service} → {', '.join(m.names)}"
+            ha = self.ha
+            if isinstance(replier, ActionReplier) and ha.undo.peek(msg.chat_id) is not None:
+
+                async def undo(user_id: str, r: Replier) -> str:
+                    ctx = ToolContext(
+                        requester=user_id, chat_id=msg.chat_id, tier="fast_path", model="-",
+                        confirm=r.confirm,
+                    )  # fmt: skip
+                    out = await ha.undo_last(ctx)
+                    return "↩️ Annulé." if out.ok else f"⛔ {out.error}"
+
+                await replier.send_actions(text, [ActionButton("↩️ Annuler", undo)])
+            else:
+                await replier.send(text)
         elif res.outcome == "declined":
             await replier.send("👍 Action annulée.")
         else:

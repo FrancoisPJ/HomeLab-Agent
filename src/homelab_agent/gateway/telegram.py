@@ -149,6 +149,9 @@ class TelegramReplier:
     async def confirm(self, question: str) -> bool:
         return await self.f.ask_confirmation(self.chat_id, question, self.user_id)
 
+    async def send_actions(self, text: str, actions: list[ActionButton]) -> None:
+        await self.f.notify_actions(self.chat_id, text, actions, ttl_s=3600)
+
 
 Handler = Callable[[IncomingMessage, Replier], Awaitable[None]]
 TextProvider = Callable[[], Awaitable[str]]

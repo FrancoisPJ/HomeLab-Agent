@@ -27,6 +27,7 @@ des boutons par un autre utilisateur sont aussi ignorés.
 | `/jobs` | dernières tâches de la conversation |
 | `/reset` | efface l'historique de la conversation |
 | `/maison` | télécommande à boutons (pièces → appareils), sans LLM |
+| `/annuler` | annuler la dernière action sur la maison |
 | `/memoire`, `/oublie <n°>\|tout` | notes que l'agent garde sur toi |
 | `/alerts`, `/routines`, `/run <nom>`, `/routine on\|off\|delete <nom>` | domotique proactive, voir [proactive.md](proactive.md) |
 

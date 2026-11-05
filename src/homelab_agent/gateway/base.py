@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from homelab_agent.config.models import Tier
 
@@ -70,6 +70,13 @@ class Gateway(abc.ABC):
     async def stop(self) -> None: ...
 
 
+@runtime_checkable
+class ActionReplier(Protocol):
+    """A replier that can also show one-shot buttons under a message."""
+
+    async def send_actions(self, text: str, actions: list[ActionButton]) -> None: ...
+
+
 class BufferedReplier:
     """Collects output in memory (used for background jobs and tests)."""
 
@@ -77,6 +84,11 @@ class BufferedReplier:
         self.messages: list[str] = []
         self.auto_confirm = auto_confirm
         self.questions: list[str] = []
+        self.actions: list[ActionButton] = []
+
+    async def send_actions(self, text: str, actions: list[ActionButton]) -> None:
+        self.messages.append(text)
+        self.actions.extend(actions)
 
     async def send(self, text: str) -> None:
         self.messages.append(text)

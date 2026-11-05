@@ -34,7 +34,7 @@ from homelab_agent.store.db import Database
 from homelab_agent.tools.homeassistant.client import HomeAssistantClient
 from homelab_agent.tools.homeassistant.permissions import PermissionEngine
 from homelab_agent.tools.homeassistant.tools import HomeAssistantService, register_ha_tools
-from homelab_agent.tools.registry import ToolRegistry, escalate_tool
+from homelab_agent.tools.registry import ToolContext, ToolRegistry, escalate_tool
 from homelab_agent.voice.stt import SpeechToText
 from homelab_agent.web.chat import RoutingNotifier, WebChatHub
 
@@ -159,6 +159,20 @@ class Services:
         if routine.check is not None and not sent:
             return f"✅ {routine.name} : rien à signaler."
         return f"▶️ {routine.name} lancée." if routine.prompt else "✔️"
+
+    async def undo_cmd(self, chat_id: str, arg: str) -> str:
+        if self.ha is None:
+            return "Home Assistant n'est pas configuré."
+        replier = self.notifier.replier_for(chat_id)
+        ctx = ToolContext(
+            requester=chat_id, chat_id=chat_id, tier="command", model="-", confirm=replier.confirm
+        )
+        res = await self.ha.undo_last(ctx)
+        if not res.ok:
+            return f"↩️ {res.error}"
+        lines = ["↩️ Annulé :"] + [f"• {r}" for r in res.data["restored"]]
+        lines += [f"⚠️ {p}" for p in res.data["problems"]]
+        return "\n".join(lines)
 
     async def memory_list(self, chat_id: str, arg: str) -> str:
         if self.orchestrator.memory is None:
@@ -365,6 +379,7 @@ async def run(config_path: str) -> None:
                 "routines": ("routines planifiées", services.routines_text),
                 "run": ("lancer une routine maintenant", services.run_routine),
                 "routine": ("activer / désactiver / supprimer une routine", services.routine_cmd),
+                "annuler": ("annuler la dernière action sur la maison", services.undo_cmd),
                 "memoire": ("ce que je retiens de toi", services.memory_list),
                 "oublie": ("oublier une note (/oublie <n°> ou tout)", services.memory_forget),
                 "alerts": ("alertes et derniers déclenchements", services.alerts_text),

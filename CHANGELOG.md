@@ -6,6 +6,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 ## [Non publié]
 
 ### Ajouté
+- **Annuler la dernière action** : bouton ↩️ sous les commandes rapides, `/annuler`, « annule » ;
+  passe par les permissions.
 - **Chat dans le panneau web** : deuxième passerelle (même agent, mêmes permissions), réponses en
   streaming (SSE), confirmations Oui/Non, résultats des tâches CPU reçus plus tard.
 - **Mémoire longue** : « souviens-toi que… », notes annoncées, `/memoire`, `/oublie`, injectées

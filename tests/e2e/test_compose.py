@@ -259,3 +259,20 @@ def test_13_home_remote() -> None:
         {"domain": "light", "service": expected, "data": {"entity_id": ["light.cuisine"]}}
     ]
     assert "Lumière cuisine" in str(after["reply_markup"])
+
+
+def test_14_undo_button_after_a_fast_command() -> None:
+    with client() as c:  # start from a known state
+        c.post(f"{HA}/_test/state", json={"entity_id": "light.salon", "state": "on"})
+    time.sleep(0.5)
+    since = send("éteins le salon")
+    sent = wait_text(lambda t: t.startswith("✅ light.turn_off"), since)
+    msg = next(m for m in sent if m["text"].startswith("✅ light.turn_off"))
+    n = len(ha_calls())
+    with client() as c:
+        c.post(f"{TG}/_test/callback", json={"user_id": USER, "message_id": msg["message_id"],
+                                              "data": _button(msg, "↩️ Annuler")})  # fmt: skip
+    wait_text(lambda t: t == "↩️ Annulé.", since)
+    assert ha_calls()[n:] == [
+        {"domain": "light", "service": "turn_on", "data": {"entity_id": ["light.salon"]}}
+    ]

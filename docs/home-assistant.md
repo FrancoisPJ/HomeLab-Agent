@@ -71,6 +71,20 @@ Le panneau web (page **Permissions**) affiche l'arbre domaines → entités avec
 et sa raison, et permet de régler chaque entité ; c'est écrit dans `config.yaml` et appliqué sans
 redémarrage.
 
+## Annuler la dernière action
+
+Avant chaque action, l'agent note l'état des appareils touchés (allumé/éteint, ouvert/fermé,
+verrouillé/déverrouillé). Pour revenir en arrière :
+
+- le bouton **↩️ Annuler** sous la réponse d'une commande rapide (« ✅ light.turn_off → salon ») ;
+- `/annuler` dans Telegram ;
+- en langage naturel : « annule », « remets comme avant » (outil `ha_undo`).
+
+L'annulation repasse par les permissions et les confirmations, et apparaît au journal (`undo`).
+Elle vaut pour la dernière action de la conversation, pendant une heure, et ne restaure que les
+états marche/arrêt (pas la luminosité, la couleur ou une position intermédiaire). Les scènes, scripts
+et notifications ne s'annulent pas.
+
 ## Journal d'audit
 
 Chaque action (et chaque appel d'outil du LLM) est enregistrée : date, demandeur, niveau et modèle,

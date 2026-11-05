@@ -76,6 +76,14 @@ class WebReplier:
     def stream(self) -> StreamHandle:
         return _WebStream(self)
 
+    async def send_actions(self, text: str, actions: list[ActionButton]) -> None:
+        buttons = []
+        for action in actions:
+            token = uuid.uuid4().hex[:12]
+            self.hub.actions[token] = (action, time.monotonic() + 3600)
+            buttons.append({"label": action.label, "token": token})
+        self.emit({"type": "message", "id": self.hub.next_id(), "text": text, "actions": buttons})
+
     async def confirm(self, question: str) -> bool:
         token = uuid.uuid4().hex[:12]
         fut: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
