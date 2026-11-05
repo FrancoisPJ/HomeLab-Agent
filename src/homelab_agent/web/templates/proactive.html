@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block title %}Proactif{% endblock %}
+{% block content %}
+<h1>Domotique proactive</h1>
+<div class="card"><p>
+{% if cfg.proactive.enabled %}<span class="ok">● activée</span>{% else %}<span class="muted">● désactivée</span> (<code>proactive.enabled</code>){% endif %}
+· destinataires : {{ (cfg.proactive.notify_chat_ids or cfg.telegram.allowed_user_ids)|join(", ") or "—" }}
+· heures calmes : {% if cfg.proactive.quiet_hours %}{{ cfg.proactive.quiet_hours.start }} → {{ cfg.proactive.quiet_hours.end }} (alertes critiques seulement){% else %}aucune{% endif %}</p>
+<p class="muted">Les règles se modifient dans la section <code>proactive</code> de la <a href="/config">configuration</a> ; elles s'appliquent sans redémarrage.</p></div>
+
+<div class="card"><h2>Alertes</h2>
+<table><tr><th>Nom</th><th>Entité</th><th>Condition</th><th>Durée</th><th>Gravité</th><th>Bouton</th></tr>
+{% for a in cfg.proactive.alerts %}<tr><td><code>{{ a.name }}</code></td><td><code>{{ a.entity }}</code></td>
+<td>{% if a.state %}état ∈ {{ a.state|join(", ") }}{% endif %}{% if a.above is not none %} &gt; {{ a.above }}{% endif %}{% if a.below is not none %} &lt; {{ a.below }}{% endif %}</td>
+<td>{{ a.for_s }} s</td><td class="{{ 'bad' if a.severity == 'critical' else ('warn' if a.severity == 'warning' else 'muted') }}">{{ a.severity }}</td>
+<td>{% if a.action %}{{ a.action.label }} → <code>{{ a.action.domain }}.{{ a.action.service }}</code>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">Aucune alerte.</td></tr>{% endfor %}</table></div>
+
+<div class="card"><h2>Derniers déclenchements</h2>
+<table><tr><th>Date</th><th>Alerte</th><th>Entité</th><th>État</th><th>Résultat</th></tr>
+{% for e in events %}<tr><td>{{ e.at.astimezone(tz).strftime('%d/%m %H:%M:%S') }}</td><td>{{ e.alert }}</td><td><code>{{ e.entity_id }}</code></td><td>{{ e.state }}</td>
+<td class="{{ 'ok' if e.outcome == 'sent' else 'muted' }}">{{ {'sent': 'envoyée', 'quiet': 'heures calmes', 'cooldown': 'anti-répétition'}.get(e.outcome, e.outcome) }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Rien depuis le démarrage.</td></tr>{% endfor %}</table></div>
+
+<div class="card"><h2>Routines</h2>
+<table><tr><th>Nom</th><th>Heure</th><th>Jours</th><th>Type</th><th>Prochaine</th><th></th></tr>
+{% for item in routines %}{% set r = item.r %}<tr><td><code>{{ r.name }}</code></td><td>{{ r.at }}</td><td>{{ r.days|join(" ") }}</td>
+<td>{% if r.check %}vérification {{ r.check.domains|join("/") }} ∈ {{ r.check.states|join("/") }}{% else %}demande ({{ r.tier.value }}) : <span class="muted">{{ r.prompt[:80] }}</span>{% endif %}</td>
+<td>{{ item.next.strftime('%a %d/%m %H:%M') if item.next else '—' }}</td>
+<td><form method="post" action="/proactive/run/{{ r.name }}"><button class="ghost">Lancer</button></form></td></tr>
+{% else %}<tr><td colspan="6" class="muted">Aucune routine.</td></tr>{% endfor %}</table></div>
+{% endblock %}

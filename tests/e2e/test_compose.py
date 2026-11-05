@@ -141,3 +141,41 @@ def test_8_audit_visible_in_panel() -> None:
         page = c.get(f"{PANEL}/audit", headers={"Authorization": "Bearer dev-password-123"})
     assert page.status_code == 200
     assert "ha_call_service" in page.text and "lock" in page.text
+
+
+def test_9_leak_alert_with_action_button() -> None:
+    n = len(ha_calls())
+    with client() as c:
+        before = len(c.get(f"{TG}/_test/sent").json())
+        c.post(
+            f"{HA}/_test/state", json={"entity_id": "binary_sensor.fuite_cuisine", "state": "on"}
+        ).raise_for_status()
+    sent = wait_text(lambda t: t.startswith("🚨 Fuite détectée"), before)
+    alert = next(m for m in sent if m["text"].startswith("🚨 Fuite détectée"))
+    assert "Fuite cuisine (Cuisine)" in alert["text"]
+    button = alert["reply_markup"]["inline_keyboard"][0][0]
+    assert button["text"] == "Couper la prise"
+    with client() as c:
+        c.post(
+            f"{TG}/_test/callback",
+            json={
+                "user_id": USER,
+                "message_id": alert["message_id"],
+                "data": button["callback_data"],
+            },
+        )
+    wait_text(lambda t: t.startswith("✅ Couper la prise"), before)
+    assert ha_calls()[n:][-1] == {
+        "domain": "switch",
+        "service": "turn_off",
+        "data": {"entity_id": ["switch.prise_bureau"]},
+    }
+
+
+def test_10_routines_commands() -> None:
+    since = send("/routines")
+    wait_text(lambda t: "soir" in t and "prochaine" in t, since)
+    with client() as c:  # make sure something is on, then run the evening check now
+        c.post(f"{HA}/_test/state", json={"entity_id": "light.salon", "state": "on"})
+    since = send("/run soir")
+    wait_text(lambda t: t.startswith("🔎 soir") and "Lumière salon" in t, since)

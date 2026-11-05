@@ -75,6 +75,7 @@ markers = [
     "e2e: end-to-end tests against the docker compose dev stack (need HLA_E2E=1)",
 ]
 addopts = "-ra --strict-markers"
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
 [tool.coverage.run]
 source = ["homelab_agent"]

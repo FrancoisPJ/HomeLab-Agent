@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from homelab_agent.config.models import TelegramSection, Tier
-from homelab_agent.gateway.base import IncomingMessage, Replier, StreamHandle
+from homelab_agent.gateway.base import ActionButton, IncomingMessage, Replier, StreamHandle
 from homelab_agent.observability.metrics import METRICS
 
 log = logging.getLogger(__name__)
@@ -137,6 +137,8 @@ class TelegramReplier:
 Handler = Callable[[IncomingMessage, Replier], Awaitable[None]]
 TextProvider = Callable[[], Awaitable[str]]
 ChatAction = Callable[[str], Awaitable[str]]
+#: extra command: (description, fn(chat_id, argument) -> reply text)
+ChatCommand = tuple[str, Callable[[str, str], Awaitable[str]]]
 
 
 class TelegramFrontend:
@@ -150,6 +152,7 @@ class TelegramFrontend:
         model_text: TextProvider,
         jobs_text: ChatAction,
         reset_chat: ChatAction,
+        commands: dict[str, ChatCommand] | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.api = api
@@ -160,7 +163,14 @@ class TelegramFrontend:
         self.jobs_text = jobs_text
         self.reset_chat = reset_chat
         self.clock = clock
+        self.commands = commands or {}
         self._pending: dict[str, tuple[str, asyncio.Future[bool]]] = {}
+        self._actions: dict[str, tuple[str, ActionButton, float]] = {}
+
+    def help_text(self) -> str:
+        extra = "".join(f"\n/{name} – {desc}" for name, (desc, _) in sorted(self.commands.items()))
+        head, _, tail = HELP_TEXT.partition("\n/help")
+        return head + extra + "\n/help" + tail
 
     # ------------------------------------------------------------- notifier
     async def notify(self, chat_id: str, text: str) -> None:
@@ -168,6 +178,18 @@ class TelegramFrontend:
 
     def replier_for(self, chat_id: str) -> Replier:
         return TelegramReplier(self, chat_id)
+
+    async def notify_actions(
+        self, chat_id: str, text: str, actions: list[ActionButton], ttl_s: float
+    ) -> None:
+        now = self.clock()
+        self._actions = {k: v for k, v in self._actions.items() if v[2] > now}
+        buttons: list[Button] = []
+        for action in actions:
+            token = uuid.uuid4().hex[:12]
+            self._actions[token] = (chat_id, action, now + ttl_s)
+            buttons.append((action.label, f"ac:{token}"))
+        await self.api.send_message(chat_id, text[: self.cfg().max_message_chars], buttons=buttons)
 
     # ------------------------------------------------------------ allowlist
     def is_allowed(self, user_id: int | str) -> bool:
@@ -193,7 +215,7 @@ class TelegramFrontend:
             cmd = cmd.split("@", 1)[0].lower()
             arg = arg.strip()
             if cmd in ("/start", "/help"):
-                await replier.send(HELP_TEXT)
+                await replier.send(self.help_text())
             elif cmd == "/status":
                 await replier.send(await self.status_text())
             elif cmd == "/model":
@@ -208,6 +230,12 @@ class TelegramFrontend:
                     return
                 tier = Tier.CLOUD if cmd == "/cloud" else Tier.CPU
                 await self._run(IncomingMessage(str(user_id), chat, arg, tier), replier)
+            elif cmd[1:] in self.commands:
+                try:
+                    await replier.send(await self.commands[cmd[1:]][1](chat, arg))
+                except Exception:
+                    log.exception("command %s failed", cmd)
+                    await replier.send("❌ Erreur interne, voir les journaux.")
             else:
                 await replier.send("Commande inconnue. /help pour la liste.")
             return
@@ -249,6 +277,9 @@ class TelegramFrontend:
             log.warning("ignored callback from non-allowlisted user %s", user_id)
             return
         parts = data.split(":")
+        if len(parts) == 2 and parts[0] == "ac":
+            await self._run_action(str(user_id), str(chat_id), callback_id, parts[1], message_id)
+            return
         if len(parts) != 3 or parts[0] != "cf":
             await self.api.answer_callback(callback_id)
             return
@@ -263,3 +294,22 @@ class TelegramFrontend:
             await self.api.edit_message_text(
                 str(chat_id), message_id, "✅ Confirmé." if yes else "❌ Annulé."
             )
+
+    async def _run_action(
+        self, user_id: str, chat_id: str, callback_id: str, token: str, message_id: int | None
+    ) -> None:
+        entry = self._actions.get(token)
+        if entry is not None and entry[2] < self.clock():
+            del self._actions[token]
+            entry = None
+        if entry is None or entry[0] != chat_id:
+            await self.api.answer_callback(callback_id, "Bouton expiré.")
+            return
+        del self._actions[token]  # one shot
+        await self.api.answer_callback(callback_id, "En cours…")
+        try:
+            result = await entry[1].run(user_id, TelegramReplier(self, chat_id))
+        except Exception:
+            log.exception("alert action failed")
+            result = "❌ Erreur interne."
+        await self.api.send_message(chat_id, result)

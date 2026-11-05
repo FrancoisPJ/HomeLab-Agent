@@ -17,7 +17,7 @@ from homelab_agent.core.router import HealthTracker, Router
 from homelab_agent.fakes.ha import AREAS
 from homelab_agent.fakes.ha import create_app as fake_ha_app
 from homelab_agent.fakes.llm import create_app as fake_llm_app
-from homelab_agent.gateway.base import BufferedReplier, Replier
+from homelab_agent.gateway.base import ActionButton, BufferedReplier, Replier
 from homelab_agent.llm.base import LLMBackend
 from homelab_agent.llm.openai_compat import OpenAICompatClient
 from homelab_agent.store.db import Database
@@ -32,9 +32,16 @@ from .conftest import base_config
 class RecordingNotifier:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self.actions: list[ActionButton] = []
 
     async def notify(self, chat_id: str, text: str) -> None:
         self.sent.append((chat_id, text))
+
+    async def notify_actions(
+        self, chat_id: str, text: str, actions: list[ActionButton], ttl_s: float
+    ) -> None:
+        self.sent.append((chat_id, text))
+        self.actions.extend(actions)
 
     def replier_for(self, chat_id: str) -> Replier:
         return BufferedReplier(auto_confirm=False)

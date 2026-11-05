@@ -13,7 +13,8 @@ Chaque demande est envoyée au moteur le plus adapté :
 | **Cloud** | tâches très complexes ou urgentes | API Claude (Anthropic) / API Gemini (Google) |
 
 Il pilote **Home Assistant** (lecture et contrôle), avec des **permissions appliquées par le code**
-et réglables dans un **panneau web**.
+et réglables dans un **panneau web**. Il peut aussi **prévenir** (fuite, porte ouverte, température)
+avec un bouton d'action, et lancer des **routines** à heure fixe ([docs/proactive.md](docs/proactive.md)).
 
 > ⚠️ Le projet a été développé et testé **sans accès au matériel réel** : la CI utilise des faux
 > services (LLM, Home Assistant, Telegram). Avant d'en dépendre, déroulez la
@@ -86,14 +87,15 @@ pour l'autocomplétion) :
 - **modèles cloud, tarifs et plafonds** : `backends.claude.model`, `backends.gemini.model`,
   `cloud.pricing`, `cloud.limits` ([docs/cloud-budget.md](docs/cloud-budget.md)) ;
 - **Home Assistant** : politique par défaut, règles, confirmations ([docs/home-assistant.md](docs/home-assistant.md)) ;
-- **Telegram** : liste blanche, rythme du streaming ([docs/telegram.md](docs/telegram.md)).
+- **Telegram** : liste blanche, rythme du streaming ([docs/telegram.md](docs/telegram.md)) ;
+- **alertes et routines** : section `proactive` ([docs/proactive.md](docs/proactive.md)).
 
 Référence complète : [docs/configuration.md](docs/configuration.md). Vérification : `make check`.
 
 ## Commandes Telegram
 
 `/status`, `/model`, `/cloud <texte>` (forcer le cloud), `/deep <texte>` (forcer le CPU, réponse
-différée), `/jobs`, `/reset`, `/help`. Tout autre message part dans l'entonnoir de routage.
+différée), `/jobs`, `/reset`, `/alerts`, `/routines`, `/run <routine>`, `/help`. Tout autre message part dans l'entonnoir de routage.
 
 ## Développement
 

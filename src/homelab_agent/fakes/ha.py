@@ -33,6 +33,8 @@ ENTITIES: list[tuple[str, str, str, str, dict[str, Any]]] = [
      {"unit_of_measurement": "°C", "device_class": "temperature"}),
     ("scene.soiree", "scening", "Soirée", "salon", {}),
     ("alarm_control_panel.maison", "armed_away", "Alarme", "entree", {}),
+    ("binary_sensor.fuite_cuisine", "off", "Fuite cuisine", "cuisine",
+     {"device_class": "moisture"}),
     ("sensor.piege", "ok", INJECTION_NAME, "salon", {}),
 ]  # fmt: skip
 
@@ -73,6 +75,20 @@ class FakeHA:
             {"entity_id": eid, "area_id": area, "device_id": None}
             for eid, _s, _n, area, _a in ENTITIES
         ]
+
+    def set_state(self, entity_id: str, state: str) -> dict[str, Any]:
+        """Test hook: change a state as if a device did it (pushes a state_changed event)."""
+        old = copy.deepcopy(self.states[entity_id])
+        self.states[entity_id]["state"] = state
+        self.states[entity_id]["last_changed"] = _now()
+        event = {
+            "entity_id": entity_id,
+            "old_state": old,
+            "new_state": copy.deepcopy(self.states[entity_id]),
+        }
+        for q in self.subscribers:
+            q.put_nowait(event)
+        return self.states[entity_id]
 
     def call(self, domain: str, service: str, data: dict[str, Any]) -> list[dict[str, Any]]:
         self.calls.append({"domain": domain, "service": service, "data": data})
@@ -147,6 +163,11 @@ def create_app() -> FastAPI:
     @app.get("/_test/calls")
     async def calls() -> list[dict[str, Any]]:
         return ha.calls
+
+    @app.post("/_test/state")
+    async def set_state(request: Request) -> dict[str, Any]:
+        body = await request.json()
+        return ha.set_state(body["entity_id"], str(body["state"]))
 
     @app.post("/_test/reset")
     async def reset() -> dict[str, bool]:

@@ -265,3 +265,66 @@ async def test_aiogram_gateway_against_fake_bot_api(run_server: Any) -> None:
             assert any(s["text"] == "answer=True" for s in await sent())
     finally:
         await gw.stop()
+
+
+async def test_extra_commands_and_help() -> None:
+    bot = FakeBot()
+    seen: list[tuple[str, str]] = []
+
+    async def run(chat: str, arg: str) -> str:
+        seen.append((chat, arg))
+        return f"ran {arg}"
+
+    async def boom(chat: str, arg: str) -> str:
+        raise RuntimeError("x")
+
+    section = TelegramSection(allowed_user_ids=[111])
+    f = TelegramFrontend(
+        bot, lambda: section, None,  # type: ignore[arg-type]
+        status_text=_text, model_text=_text, jobs_text=_chat, reset_chat=_chat,
+        commands={"run": ("lancer une routine", run), "boom": ("casse", boom)},
+    )  # fmt: skip
+    await f.on_message(111, 5, "/run soir")
+    await f.on_message(111, 5, "/boom")
+    await f.on_message(111, 5, "/help")
+    texts = bot.texts()
+    assert seen == [("5", "soir")] and texts[0] == "ran soir"
+    assert "Erreur interne" in texts[1]
+    assert "/run – lancer une routine" in texts[2] and texts[2].rstrip().endswith(
+        "écris simplement ta demande."
+    )
+
+
+async def test_action_buttons_are_one_shot_and_expire() -> None:
+    from homelab_agent.gateway.base import ActionButton
+
+    bot = FakeBot()
+    now = [0.0]
+    section = TelegramSection(allowed_user_ids=[111])
+    f = TelegramFrontend(
+        bot, lambda: section, None,  # type: ignore[arg-type]
+        status_text=_text, model_text=_text, jobs_text=_chat, reset_chat=_chat,
+        clock=lambda: now[0],
+    )  # fmt: skip
+    calls: list[str] = []
+
+    async def act(user: str, replier: Replier) -> str:
+        calls.append(user)
+        return "✅ fait"
+
+    await f.notify_actions("111", "🚨 Fuite", [ActionButton("Couper", act)], ttl_s=60)
+    _, (chat, text, buttons) = bot.ops[0]
+    assert text == "🚨 Fuite" and buttons and buttons[0][0] == "Couper"
+    data = buttons[0][1]
+    await f.on_callback(999, 111, "x", data)  # stranger
+    await f.on_callback(111, 222, "x", data)  # other chat
+    assert calls == []
+    await f.on_callback(111, 111, "cb1", data)
+    assert calls == ["111"] and bot.texts()[-1] == "✅ fait"
+    await f.on_callback(111, 111, "cb2", data)  # one shot
+    assert calls == ["111"] and ("answer", ("cb2", "Bouton expiré.")) in bot.ops
+    await f.notify_actions("111", "again", [ActionButton("Couper", act)], ttl_s=60)
+    data2 = [op for op in bot.ops if op[0] == "send"][-1][1][2][0][1]
+    now[0] = 61
+    await f.on_callback(111, 111, "cb3", data2)
+    assert calls == ["111"]

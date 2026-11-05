@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -33,10 +34,25 @@ class Replier(Protocol):
     async def confirm(self, question: str) -> bool: ...
 
 
+ActionCallback = Callable[[str, "Replier"], Awaitable[str]]
+
+
+@dataclass(slots=True)
+class ActionButton:
+    """A one-shot button under a notification. ``run(user_id, replier)`` returns a status text."""
+
+    label: str
+    run: ActionCallback
+
+
 class Notifier(Protocol):
-    """Sends out-of-band messages (finished jobs, budget alerts)."""
+    """Sends out-of-band messages (finished jobs, budget alerts, home alerts)."""
 
     async def notify(self, chat_id: str, text: str) -> None: ...
+
+    async def notify_actions(
+        self, chat_id: str, text: str, actions: list[ActionButton], ttl_s: float
+    ) -> None: ...
 
     def replier_for(self, chat_id: str) -> Replier: ...
 

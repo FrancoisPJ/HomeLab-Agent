@@ -27,11 +27,18 @@ async def services(tmp_path: Path) -> Services:
     # the harness services read the live config from this store
     h.cfg_store._config = store.config
     h.cfg_store.path = store.path
-    return Services(
+    svc = Services(
         store=h.cfg_store, db=h.db, backends=h.backends, health=h.router.health,
         budget=h.orchestrator.budget, router=h.router, registry=h.orchestrator.registry,
         orchestrator=h.orchestrator, ha=h.ha,
     )  # fmt: skip
+    from homelab_agent.core.proactive import AlertEngine, RoutineScheduler
+
+    svc.routines = RoutineScheduler(
+        lambda: svc.cfg, h.orchestrator.handle, lambda: svc.notifier, h.ha, h.db
+    )
+    svc.alerts = AlertEngine(lambda: svc.cfg, h.ha, lambda: svc.notifier, h.db)
+    return svc
 
 
 def test_panel_refuses_to_start_without_password(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,7 +96,7 @@ def test_auth_required(client: TestClient) -> None:
 
 def test_pages_render(client: TestClient) -> None:
     login(client)
-    for path in ("/", "/permissions", "/budget", "/jobs", "/audit", "/config"):
+    for path in ("/", "/permissions", "/proactive", "/budget", "/jobs", "/audit", "/config"):
         r = client.get(path)
         assert r.status_code == 200, path
     assert "light.salon" in client.get("/permissions").text
@@ -136,3 +143,14 @@ def test_config_editor_validates(client: TestClient) -> None:
     r = client.post("/config", data={"text": before.replace("alert_at: 0.8", "alert_at: 0.5")})
     assert "Enregistré" in r.text
     assert svc.cfg.cloud.limits.alert_at == 0.5
+
+
+def test_proactive_page_and_run(client: TestClient) -> None:
+    login(client)
+    svc: Services = client.svc  # type: ignore[attr-defined]
+    page = client.get("/proactive")
+    assert "fuite" in page.text and "soir" in page.text
+    r = client.post("/proactive/run/soir", follow_redirects=False)
+    assert r.status_code == 303
+    assert client.post("/proactive/run/nope").status_code == 404
+    assert svc.routines is not None

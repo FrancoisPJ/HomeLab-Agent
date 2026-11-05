@@ -259,6 +259,28 @@ def create_app(services: Services) -> FastAPI:
         save_ha("confirm", current)
         return RedirectResponse("/permissions", status_code=303)
 
+    # ------------------------------------------------------------- proactive
+    @app.get("/proactive", response_class=HTMLResponse)
+    async def proactive(request: Request) -> HTMLResponse:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(services.cfg.agent.timezone)
+        routines = []
+        for r in services.cfg.proactive.routines:
+            nxt = services.routines.next_run(r) if services.routines else None
+            routines.append({"r": r, "next": nxt.astimezone(tz) if nxt and r.enabled else None})
+        events = list(reversed(services.alerts.events[-50:])) if services.alerts else []
+        return render(request, "proactive.html", routines=routines, events=events, tz=tz, ran=None)
+
+    @app.post("/proactive/run/{name}", response_class=HTMLResponse)
+    async def proactive_run(request: Request, name: str) -> Response:
+        if services.routines is None or services.routines.get(name) is None:
+            raise HTTPException(404, "unknown routine")
+        routine = services.routines.get(name)
+        assert routine is not None
+        await services.routines.run(routine)
+        return RedirectResponse("/proactive", status_code=303)
+
     # ---------------------------------------------------------------- budget
     @app.get("/budget", response_class=HTMLResponse)
     async def budget(request: Request) -> HTMLResponse:

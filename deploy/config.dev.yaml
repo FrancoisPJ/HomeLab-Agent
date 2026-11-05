@@ -29,5 +29,23 @@ home_assistant:
   token_env: HA_TOKEN
   confirm: [{ domain: lock }]
 web: { enabled: true, port: 8099, password_env: PANEL_PASSWORD }
+proactive:
+  enabled: true
+  alerts:
+    - name: fuite
+      entity: "binary_sensor.fuite_*"
+      state: "on"
+      severity: critical
+      message: "Fuite détectée : {name} ({area})"
+      action: { label: "Couper la prise", domain: switch, service: turn_off, entity: switch.prise_bureau }
+    - name: chaud
+      entity: "sensor.temperature_*"
+      above: 28
+      for_s: 1
+      message: "{name} : {state}{unit}"
+  routines:
+    - name: soir
+      at: "23:00"
+      check: { domains: [light, switch], states: ["on"] }
 models: { items: [] }
 store: { path: /data/agent.db }

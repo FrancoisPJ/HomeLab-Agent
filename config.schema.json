@@ -68,6 +68,149 @@
       "title": "AgentSection",
       "type": "object"
     },
+    "AlertAction": {
+      "additionalProperties": false,
+      "description": "A button under the alert message, e.g. \"Close\". Goes through the permission engine.",
+      "properties": {
+        "label": {
+          "maxLength": 40,
+          "title": "Label",
+          "type": "string"
+        },
+        "domain": {
+          "title": "Domain",
+          "type": "string"
+        },
+        "service": {
+          "title": "Service",
+          "type": "string"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Target entity; default: the entity that triggered the alert.",
+          "title": "Entity"
+        }
+      },
+      "required": [
+        "label",
+        "domain",
+        "service"
+      ],
+      "title": "AlertAction",
+      "type": "object"
+    },
+    "AlertRule": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z0-9_]+$",
+          "title": "Name",
+          "type": "string"
+        },
+        "entity": {
+          "description": "Entity id or glob, e.g. binary_sensor.porte_*",
+          "title": "Entity",
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fires when the state is one of these values (e.g. ['on']).",
+          "title": "State"
+        },
+        "above": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fires when the numeric state is above.",
+          "title": "Above"
+        },
+        "below": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fires when the numeric state is below.",
+          "title": "Below"
+        },
+        "for_s": {
+          "default": 0,
+          "description": "Condition must hold this long (seconds).",
+          "minimum": 0,
+          "title": "For S",
+          "type": "number"
+        },
+        "severity": {
+          "default": "warning",
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "message": {
+          "default": "⚠️ {name} : {state}{unit}",
+          "description": "Placeholders: {name} {entity_id} {state} {unit} {area} {alert}",
+          "title": "Message",
+          "type": "string"
+        },
+        "cooldown_s": {
+          "default": 3600,
+          "description": "Minimum delay between two notifications.",
+          "minimum": 0,
+          "title": "Cooldown S",
+          "type": "integer"
+        },
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AlertAction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "entity"
+      ],
+      "title": "AlertRule",
+      "type": "object"
+    },
     "AnthropicBackend": {
       "additionalProperties": false,
       "properties": {
@@ -792,6 +935,186 @@
       "title": "Pricing",
       "type": "object"
     },
+    "ProactiveSection": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "notify_chat_ids": {
+          "description": "Recipients; default: telegram.allowed_user_ids.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Notify Chat Ids",
+          "type": "array"
+        },
+        "quiet_hours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuietHours"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "During these hours only critical alerts are sent."
+        },
+        "alerts": {
+          "items": {
+            "$ref": "#/$defs/AlertRule"
+          },
+          "title": "Alerts",
+          "type": "array"
+        },
+        "routines": {
+          "items": {
+            "$ref": "#/$defs/Routine"
+          },
+          "title": "Routines",
+          "type": "array"
+        },
+        "action_ttl_s": {
+          "default": 3600,
+          "description": "How long alert buttons stay usable.",
+          "minimum": 60,
+          "title": "Action Ttl S",
+          "type": "integer"
+        }
+      },
+      "title": "ProactiveSection",
+      "type": "object"
+    },
+    "QuietHours": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "default": "23:00",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "default": "07:00",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "title": "QuietHours",
+      "type": "object"
+    },
+    "Routine": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z0-9_]+$",
+          "title": "Name",
+          "type": "string"
+        },
+        "at": {
+          "description": "Local time (agent.timezone), HH:MM.",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "title": "At",
+          "type": "string"
+        },
+        "days": {
+          "items": {
+            "enum": [
+              "mon",
+              "tue",
+              "wed",
+              "thu",
+              "fri",
+              "sat",
+              "sun"
+            ],
+            "type": "string"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoutineCheck"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Request sent to the agent as if you wrote it.",
+          "title": "Prompt"
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "default": "gpu",
+          "description": "Tier for prompt routines (cpu = background job)."
+        },
+        "only_if_found": {
+          "default": true,
+          "description": "check: stay silent when nothing matches.",
+          "title": "Only If Found",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "at"
+      ],
+      "title": "Routine",
+      "type": "object"
+    },
+    "RoutineCheck": {
+      "additionalProperties": false,
+      "description": "LLM-free report: list readable entities in one of ``states``.",
+      "properties": {
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "states": {
+          "items": {
+            "type": "string"
+          },
+          "title": "States",
+          "type": "array"
+        },
+        "entities": {
+          "description": "Optional globs to restrict.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        }
+      },
+      "title": "RoutineCheck",
+      "type": "object"
+    },
     "RoutingSection": {
       "additionalProperties": false,
       "properties": {
@@ -1044,6 +1367,9 @@
     },
     "web": {
       "$ref": "#/$defs/WebSection"
+    },
+    "proactive": {
+      "$ref": "#/$defs/ProactiveSection"
     },
     "models": {
       "$ref": "#/$defs/ModelsSection"

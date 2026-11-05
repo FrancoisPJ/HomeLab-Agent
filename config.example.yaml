@@ -134,6 +134,43 @@ web:
   password_env: PANEL_PASSWORD  # le panneau refuse de démarrer sans
 
 # -----------------------------------------------------------------------------
+#  Domotique proactive : alertes sur événements Home Assistant et routines.
+#  Voir docs/proactive.md. Commandes Telegram : /alerts, /routines, /run <nom>.
+# -----------------------------------------------------------------------------
+proactive:
+  enabled: false
+  notify_chat_ids: []           # destinataires ; vide = telegram.allowed_user_ids
+  quiet_hours: { start: "23:00", end: "07:00" }   # la nuit : alertes « critical » seulement
+  alerts: []
+  #  - name: fuite_eau            # immédiat, toujours envoyé, avec un bouton d'action
+  #    entity: "binary_sensor.fuite_*"
+  #    state: "on"
+  #    severity: critical
+  #    message: "💧 Fuite détectée : {name} ({area})"
+  #    action: { label: "Couper l'eau", domain: valve, service: close_valve, entity: valve.arrivee_eau }
+  #  - name: porte_ouverte        # seulement si ouverte depuis 10 minutes
+  #    entity: binary_sensor.porte_garage
+  #    state: "on"
+  #    for_s: 600
+  #    message: "🚪 {name} est ouverte depuis 10 min"
+  #    action: { label: "Fermer", domain: cover, service: close_cover, entity: cover.garage }
+  #  - name: chaleur
+  #    entity: "sensor.temperature_*"
+  #    above: 28
+  #    for_s: 900
+  #    cooldown_s: 7200
+  #    message: "🌡️ {name} : {state}{unit}"
+  routines: []
+  #  - name: verif_soir           # sans LLM : liste ce qui est encore allumé/ouvert
+  #    at: "23:00"
+  #    check: { domains: [light, switch, cover], states: ["on", "open"] }
+  #  - name: brief_matin          # demande envoyée à l'agent comme si tu l'écrivais
+  #    at: "07:30"
+  #    days: [mon, tue, wed, thu, fri]
+  #    prompt: "Fais-moi un point court sur la maison : températures, ce qui est allumé ou ouvert."
+  #    tier: gpu
+
+# -----------------------------------------------------------------------------
 #  Modèles GGUF servis par llama.cpp (via llama-swap). C'est ICI qu'on choisit
 #  les modèles. Après modification :  make engines models  puis  make restart.
 #  Candidats et méthode de choix : docs/models.md. À valider avec scripts/bench.py.

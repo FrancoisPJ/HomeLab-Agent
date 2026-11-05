@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -61,6 +62,8 @@ class EntityCache:
         self.areas: dict[str, str] = {}  # area_id -> name
         self._entity_area: dict[str, str] = {}  # entity_id -> area_id
         self.updated_at: datetime | None = None
+        #: called with (old, new) on every live state change (not on full loads)
+        self.listeners: list[Callable[[EntityInfo | None, EntityInfo | None], None]] = []
 
     def load(
         self,
@@ -82,15 +85,20 @@ class EntityCache:
                     self._entity_area[e["entity_id"]] = area
         self.entities = {}
         for s in states:
-            self.apply_state(s)
+            self.apply_state(s, notify=False)
         self.updated_at = datetime.now(UTC)
 
-    def apply_state(self, s: dict[str, Any] | None, entity_id: str | None = None) -> None:
+    def apply_state(
+        self, s: dict[str, Any] | None, entity_id: str | None = None, *, notify: bool = True
+    ) -> None:
         if s is None:  # entity removed
             if entity_id:
-                self.entities.pop(entity_id, None)
+                old_removed = self.entities.pop(entity_id, None)
+                if notify and old_removed is not None:
+                    self._notify(old_removed, None)
             return
         eid = s["entity_id"]
+        old = self.entities.get(eid)
         attrs = s.get("attributes") or {}
         area_id = self._entity_area.get(eid)
         self.entities[eid] = EntityInfo(
@@ -110,6 +118,15 @@ class EntityCache:
             },
         )  # fmt: skip
         self.updated_at = datetime.now(UTC)
+        if notify:
+            self._notify(old, self.entities[eid])
+
+    def _notify(self, old: EntityInfo | None, new: EntityInfo | None) -> None:
+        for listener in list(self.listeners):
+            try:
+                listener(old, new)
+            except Exception:  # a broken listener must not break the cache
+                log.exception("entity listener failed")
 
     def entities_in_area(self, area: str) -> list[str]:
         key = area.casefold()

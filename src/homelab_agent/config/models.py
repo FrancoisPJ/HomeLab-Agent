@@ -295,6 +295,106 @@ class StoreSection(_Base):
     path: str = "./data/agent.db"
 
 
+# ----------------------------------------------------------------------- proactive
+_HHMM = r"^([01][0-9]|2[0-3]):[0-5][0-9]$"
+Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+WEEKDAYS: list[Weekday] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+class QuietHours(_Base):
+    start: str = Field("23:00", pattern=_HHMM)
+    end: str = Field("07:00", pattern=_HHMM)
+
+
+class AlertAction(_Base):
+    """A button under the alert message, e.g. "Close". Goes through the permission engine."""
+
+    label: str = Field(max_length=40)
+    domain: str
+    service: str
+    entity: str | None = Field(
+        None, description="Target entity; default: the entity that triggered the alert."
+    )
+
+
+class AlertRule(_Base):
+    name: str = Field(pattern=r"^[a-z0-9_]+$")
+    entity: str = Field(description="Entity id or glob, e.g. binary_sensor.porte_*")
+    state: list[str] | None = Field(
+        None, description="Fires when the state is one of these values (e.g. ['on'])."
+    )
+    above: float | None = Field(None, description="Fires when the numeric state is above.")
+    below: float | None = Field(None, description="Fires when the numeric state is below.")
+    for_s: float = Field(0, ge=0, description="Condition must hold this long (seconds).")
+    severity: Literal["info", "warning", "critical"] = "warning"
+    message: str = Field(
+        "⚠️ {name} : {state}{unit}",
+        description="Placeholders: {name} {entity_id} {state} {unit} {area} {alert}",
+    )
+    cooldown_s: int = Field(3600, ge=0, description="Minimum delay between two notifications.")
+    action: AlertAction | None = None
+
+    @field_validator("state", mode="before")
+    @classmethod
+    def _one_state(cls, v: object) -> object:
+        return [v] if isinstance(v, str) else v
+
+    @model_validator(mode="after")
+    def _has_condition(self) -> AlertRule:
+        if self.state is None and self.above is None and self.below is None:
+            raise ValueError(f"alert '{self.name}' needs state, above or below")
+        return self
+
+
+class RoutineCheck(_Base):
+    """LLM-free report: list readable entities in one of ``states``."""
+
+    domains: list[str] = Field(default_factory=lambda: ["light", "switch", "cover"])
+    states: list[str] = Field(default_factory=lambda: ["on", "open"])
+    entities: list[str] = Field(default_factory=list, description="Optional globs to restrict.")
+
+
+class Routine(_Base):
+    name: str = Field(pattern=r"^[a-z0-9_]+$")
+    at: str = Field(pattern=_HHMM, description="Local time (agent.timezone), HH:MM.")
+    days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS))
+    enabled: bool = True
+    check: RoutineCheck | None = None
+    prompt: str | None = Field(None, description="Request sent to the agent as if you wrote it.")
+    tier: Tier = Field(Tier.GPU, description="Tier for prompt routines (cpu = background job).")
+    only_if_found: bool = Field(True, description="check: stay silent when nothing matches.")
+
+    @model_validator(mode="after")
+    def _kind(self) -> Routine:
+        if (self.check is None) == (self.prompt is None):
+            raise ValueError(f"routine '{self.name}' needs exactly one of check or prompt")
+        return self
+
+
+class ProactiveSection(_Base):
+    enabled: bool = False
+    notify_chat_ids: list[int] = Field(
+        default_factory=list, description="Recipients; default: telegram.allowed_user_ids."
+    )
+    quiet_hours: QuietHours | None = Field(
+        None, description="During these hours only critical alerts are sent."
+    )
+    alerts: list[AlertRule] = Field(default_factory=list)
+    routines: list[Routine] = Field(default_factory=list)
+    action_ttl_s: int = Field(3600, ge=60, description="How long alert buttons stay usable.")
+
+    @model_validator(mode="after")
+    def _unique(self) -> ProactiveSection:
+        for kind, names in (
+            ("alert", [a.name for a in self.alerts]),
+            ("routine", [r.name for r in self.routines]),
+        ):
+            dupes = {n for n in names if names.count(n) > 1}
+            if dupes:
+                raise ValueError(f"duplicate {kind} names: {sorted(dupes)}")
+        return self
+
+
 # -------------------------------------------------------------------------- root
 class AppConfig(_Base):
     """Root of ``config.yaml``."""
@@ -307,6 +407,7 @@ class AppConfig(_Base):
     cloud: CloudSection = Field(default_factory=CloudSection)
     home_assistant: HomeAssistantSection = Field(default_factory=HomeAssistantSection)
     web: WebSection = Field(default_factory=WebSection)
+    proactive: ProactiveSection = Field(default_factory=ProactiveSection)
     models: ModelsSection = Field(default_factory=ModelsSection)
     store: StoreSection = Field(default_factory=StoreSection)
 

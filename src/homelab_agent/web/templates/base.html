@@ -12,6 +12,7 @@
   {% set p = request.url.path %}
   <a href="/" class="{{ 'on' if p == '/' }}">État</a>
   <a href="/permissions" class="{{ 'on' if p.startswith('/permissions') }}">Permissions</a>
+  <a href="/proactive" class="{{ 'on' if p == '/proactive' }}">Proactif</a>
   <a href="/budget" class="{{ 'on' if p == '/budget' }}">Budget</a>
   <a href="/jobs" class="{{ 'on' if p == '/jobs' }}">Tâches</a>
   <a href="/audit" class="{{ 'on' if p == '/audit' }}">Audit</a>

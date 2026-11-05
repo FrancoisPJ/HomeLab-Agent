@@ -9,6 +9,7 @@ import os
 import signal
 from dataclasses import dataclass, field
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import uvicorn
 
@@ -17,8 +18,9 @@ from homelab_agent.config.models import AppConfig, Tier
 from homelab_agent.core.budget import BudgetManager
 from homelab_agent.core.jobs import JobQueue
 from homelab_agent.core.orchestrator import Orchestrator
+from homelab_agent.core.proactive import AlertEngine, RoutineScheduler
 from homelab_agent.core.router import TIER_LABELS, HealthTracker, Router
-from homelab_agent.gateway.base import BufferedReplier, Notifier, Replier
+from homelab_agent.gateway.base import ActionButton, BufferedReplier, Notifier, Replier
 from homelab_agent.gateway.telegram import TelegramFrontend
 from homelab_agent.llm.base import LLMBackend
 from homelab_agent.llm.factory import build_backends
@@ -38,6 +40,11 @@ class LogNotifier:
     async def notify(self, chat_id: str, text: str) -> None:
         log.info("notification for %s: %s", chat_id, text)
 
+    async def notify_actions(
+        self, chat_id: str, text: str, actions: list[ActionButton], ttl_s: float
+    ) -> None:
+        log.info("notification for %s: %s", chat_id, text)
+
     def replier_for(self, chat_id: str) -> Replier:
         return BufferedReplier()
 
@@ -55,6 +62,8 @@ class Services:
     ha: HomeAssistantService | None
     jobs: JobQueue | None = None
     notifier: Notifier = field(default_factory=LogNotifier)
+    alerts: AlertEngine | None = None
+    routines: RoutineScheduler | None = None
     started: bool = False
 
     @property
@@ -106,6 +115,46 @@ class Services:
         await self.db.clear_history(chat_id)
         return "🧹 Contexte effacé."
 
+    # ------------------------------------------------------------ proactive
+    async def routines_text(self, chat_id: str, arg: str) -> str:
+        if self.routines is None or not self.cfg.proactive.enabled:
+            return "Les routines sont désactivées (proactive.enabled)."
+        lines = ["Routines :"]
+        tz = ZoneInfo(self.cfg.agent.timezone)
+        for r in self.cfg.proactive.routines:
+            nxt = self.routines.next_run(r)
+            when = nxt.astimezone(tz).strftime("%a %d/%m %H:%M") if nxt and r.enabled else "—"
+            kind = "vérification" if r.check else f"demande ({r.tier.value})"
+            lines.append(f"• {r.name} — {r.at} — {kind} — prochaine : {when}")
+        return "\n".join(lines) if len(lines) > 1 else "Aucune routine configurée."
+
+    async def run_routine(self, chat_id: str, arg: str) -> str:
+        if self.routines is None:
+            return "Les routines sont désactivées."
+        routine = self.routines.get(arg.strip())
+        if routine is None:
+            return "Usage : /run <nom>. Voir /routines."
+        sent = await self.routines.run(routine, [chat_id])
+        if routine.check is not None and not sent:
+            return f"✅ {routine.name} : rien à signaler."
+        return f"▶️ {routine.name} lancée." if routine.prompt else "✔️"
+
+    async def alerts_text(self, chat_id: str, arg: str) -> str:
+        if self.alerts is None or not self.cfg.proactive.enabled:
+            return "Les alertes sont désactivées (proactive.enabled)."
+        rules = self.cfg.proactive.alerts
+        lines = [f"Alertes configurées : {len(rules)}"]
+        lines += [f"• {r.name} ({r.severity}) sur {r.entity}" for r in rules]
+        recent = self.alerts.events[-5:]
+        if recent:
+            lines.append("Dernières :")
+            tz = ZoneInfo(self.cfg.agent.timezone)
+            lines += [
+                f"• {e.at.astimezone(tz):%d/%m %H:%M} {e.alert} {e.entity_id} → {e.outcome}"
+                for e in reversed(recent)
+            ]
+        return "\n".join(lines)
+
 
 async def build_services(store: ConfigStore, *, start_background: bool = True) -> Services:
     cfg = store.config
@@ -134,11 +183,34 @@ async def build_services(store: ConfigStore, *, start_background: bool = True) -
         register_ha_tools(registry, ha)
     orch = Orchestrator(lambda: store.config, db, router, registry, budget, ha)
     services = Services(store, db, backends, health, budget, router, registry, orch, ha)
+    services.routines = RoutineScheduler(
+        lambda: store.config, orch.handle, lambda: services.notifier, ha, db
+    )
+    if ha is not None:
+        services.alerts = AlertEngine(lambda: store.config, ha, lambda: services.notifier, db)
+        services.alerts.attach()
     if start_background:
         health.start(backends, cfg.routing.health_interval_s)
         if ha is not None:
             ha.client.start()
     return services
+
+
+async def start_proactive(services: Services) -> None:
+    if services.routines is not None:
+        services.routines.start()
+    if services.alerts is not None and services.ha is not None:
+        alerts = services.alerts
+
+        async def initial_scan() -> None:
+            # wait for the first Home Assistant snapshot, then arm already-true conditions
+            for _ in range(120):
+                if services.ha is not None and services.ha.client.cache.entities:
+                    break
+                await asyncio.sleep(1)
+            alerts.evaluate_all()
+
+        asyncio.create_task(initial_scan(), name="alerts-initial-scan")  # noqa: RUF006
 
 
 async def start_jobs(services: Services) -> None:
@@ -156,6 +228,10 @@ async def start_jobs(services: Services) -> None:
 
 
 async def close_services(services: Services) -> None:
+    if services.routines:
+        await services.routines.stop()
+    if services.alerts:
+        await services.alerts.stop()
     if services.jobs:
         await services.jobs.stop()
     await services.health.stop()
@@ -191,6 +267,11 @@ async def run(config_path: str) -> None:
             model_text=services.model_text,
             jobs_text=services.jobs_text,
             reset_chat=services.reset_chat,
+            commands={
+                "routines": ("routines planifiées", services.routines_text),
+                "run": ("lancer une routine maintenant", services.run_routine),
+                "alerts": ("alertes et derniers déclenchements", services.alerts_text),
+            },
         )
         gateway.attach(frontend)
         services.notifier = frontend
@@ -198,6 +279,7 @@ async def run(config_path: str) -> None:
             log.warning("telegram.allowed_user_ids is empty: every message will be ignored")
 
     await start_jobs(services)
+    await start_proactive(services)
     if gateway is not None:
         await gateway.start()
 

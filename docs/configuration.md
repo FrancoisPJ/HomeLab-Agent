@@ -86,6 +86,9 @@ size exceeded » — la demande passe au moteur suivant (niveau voisin), sans ma
 `enabled`, `bind` (127.0.0.1), `port`, `password_env`. Dans Docker, le conteneur écoute sur
 `0.0.0.0` (variable `HLA_WEB_BIND`) mais le port n'est publié que sur `127.0.0.1` de l'hôte.
 
+### `proactive`
+Alertes sur événements Home Assistant et routines planifiées. Voir [proactive.md](proactive.md).
+
 ### `models`
 Les GGUF servis par llama.cpp. Voir [models.md](models.md).
 
@@ -116,6 +119,7 @@ Après modification : `make engines` (génère `engines/llama-swap-*.yaml`), `ma
 | Modifié depuis le panneau ou l'éditeur | Pris en compte |
 |---|---|
 | permissions, confirmations, politique par défaut | immédiatement |
+| alertes et routines (`proactive`) | immédiatement |
 | routage, mots-clés, budget, tarifs | immédiatement |
 | allowlist Telegram | immédiatement |
 | backends, URL HA, token, panneau, modèles | au redémarrage (`make restart`) |

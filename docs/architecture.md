@@ -32,6 +32,7 @@ Telegram ◄─polling─►│ gateway ─► orchestrateur ─► routeur ─�
 | `core/router.py` | choix du niveau, santé des moteurs, repli sur le niveau voisin |
 | `core/jobs.py` | file persistante des tâches CPU, reprise après redémarrage |
 | `core/budget.py` | dépenses cloud, plafonds jour/mois, alertes |
+| `core/proactive.py` | alertes sur changements d'état Home Assistant, routines planifiées |
 | `llm/` | interface commune (chat, outils, streaming, jetons) + clients llama-server, Claude, Gemini |
 | `tools/registry.py` | outils déclarés en JSON Schema, validation des arguments, outil interne `escalate` |
 | `tools/homeassistant/` | client REST/WS + cache, moteur de permissions, outils exposés au LLM |
