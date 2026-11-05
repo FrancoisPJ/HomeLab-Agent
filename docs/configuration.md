@@ -65,6 +65,7 @@ size exceeded » — la demande passe au moteur suivant (niveau voisin), sans ma
 | Clé | Rôle |
 |---|---|
 | `fast_path.enabled`, `fast_path.aliases` | chemin rapide et alias « nom prononcé → entity_id » |
+| `fast_path.match_names` | reconnaître aussi les noms Home Assistant (seulement si une seule entité porte ce nom) ; `false` = alias uniquement |
 | `gpu_quality.backend`, `min_chars`, `keywords`, `retry_after_s` | montée en qualité sur GPU pour les demandes moyennes ([gpu-sharing.md](gpu-sharing.md)) |
 | `tiers.gpu / cpu / cloud` | moteurs de chaque niveau, par ordre de préférence (l'ordre du cloud = préférence Claude/Gemini) |
 | `escalation.to_cpu_keywords`, `to_cloud_keywords` | mots-clés d'escalade |
@@ -96,7 +97,8 @@ Messages vocaux Telegram : `enabled`, `stt_url`, `language`, `max_duration_s`, `
 `timeout_s`, `stt_model`, `api_key_env`. Voir [voice.md](voice.md).
 
 ### `proactive`
-Alertes sur événements Home Assistant et routines planifiées (`enabled`, `notify_chat_ids`,
+Alertes sur événements Home Assistant et routines planifiées (`enabled`, `alerts_enabled`,
+`routines_enabled`, `notify_chat_ids`,
 `quiet_hours`, `alerts`, `routines`, `action_ttl_s`, `chat_edit`, `max_routines`). Les routines
 peuvent être créées depuis Telegram, après confirmation. Voir [proactive.md](proactive.md).
 

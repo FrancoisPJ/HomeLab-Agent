@@ -410,6 +410,12 @@
           "description": "Spoken name -> entity_id, e.g. {'salon': 'light.salon'}.",
           "title": "Aliases",
           "type": "object"
+        },
+        "match_names": {
+          "default": true,
+          "description": "Also match Home Assistant friendly names (only when exactly one entity has that name). false = aliases only.",
+          "title": "Match Names",
+          "type": "boolean"
         }
       },
       "title": "FastPathSection",
@@ -977,6 +983,32 @@
           "default": false,
           "title": "Enabled",
           "type": "boolean"
+        },
+        "alerts_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override for alerts only (null = follow `enabled`).",
+          "title": "Alerts Enabled"
+        },
+        "routines_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override for routines only (null = follow `enabled`).",
+          "title": "Routines Enabled"
         },
         "notify_chat_ids": {
           "description": "Recipients; default: telegram.allowed_user_ids.",

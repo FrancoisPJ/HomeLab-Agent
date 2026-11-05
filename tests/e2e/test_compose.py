@@ -116,9 +116,11 @@ def test_5_confirmation_flow_for_locks() -> None:
 
 def test_6_cloud_cap_then_fallback() -> None:
     since = send("/cloud première question cloud")
-    wait_text(lambda t: "(cloud)" in t, since)
-    # the first answer costs more than the cap: a budget alert follows it
-    wait_text(lambda t: "Budget cloud" in t, since)
+    sent = wait_text(lambda t: "(cloud)" in t or "bascule" in t, since)
+    if any("(cloud)" in m["text"] for m in sent):
+        # fresh stack: the first answer costs more than the cap, a budget alert follows it
+        wait_text(lambda t: "Budget cloud" in t, since)
+    # (on a stack that already spent its budget, the first request falls back directly)
     since = send("/cloud deuxième question cloud")
     sent = wait_text(lambda t: "bascule" in t, since)
     fallback = next(m["text"] for m in sent if "bascule" in m["text"])
@@ -144,6 +146,11 @@ def test_8_audit_visible_in_panel() -> None:
 
 
 def test_9_leak_alert_with_action_button() -> None:
+    with client() as c:  # make sure the sensor goes off -> on (the alert fires on the change)
+        c.post(
+            f"{HA}/_test/state", json={"entity_id": "binary_sensor.fuite_cuisine", "state": "off"}
+        )
+    time.sleep(0.5)
     n = len(ha_calls())
     with client() as c:
         before = len(c.get(f"{TG}/_test/sent").json())
@@ -194,6 +201,8 @@ def test_11_voice_note_drives_the_house() -> None:
 
 
 def test_12_create_a_reminder_from_the_chat() -> None:
+    since = send("/routine delete sortir_les_poubelles")  # leftover of an interrupted run
+    wait_text(lambda t: "supprimée" in t or "inconnue" in t, since)
     args = '{"what": "reminder", "at": "20h", "days": "mardi", "text": "Sortir les poubelles"}'
     since = send(f"[[tool:routine_create {args}]]")
     sent = wait_text(lambda t: t.startswith("Créer la routine"), since)

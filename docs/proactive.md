@@ -7,7 +7,9 @@ matin). Tout se configure dans la section `proactive` de `config.yaml`, se modif
 
 ```yaml
 proactive:
-  enabled: true
+  enabled: true                       # interrupteur général
+  alerts_enabled: null                # null = suit `enabled` ; true/false pour forcer
+  routines_enabled: null              # idem pour les routines
   notify_chat_ids: []                 # vide = telegram.allowed_user_ids
   quiet_hours: { start: "23:00", end: "07:00" }
   alerts: [...]
@@ -95,7 +97,8 @@ alerts:
 L'agent prépare la routine puis demande **toujours** une confirmation (✅ Oui / ❌ Non) avec son
 résumé : « Créer la routine sortir_les_poubelles : rappel « Sortir les poubelles », mar à 20:00 ? ».
 Après validation, elle est écrite dans `config.yaml` (source de vérité unique) et active tout de
-suite ; `proactive.enabled` passe à `true` si besoin. Une routine créée depuis une conversation est
+suite ; si les routines étaient coupées, `proactive.routines_enabled` passe à `true` (les alertes
+ne sont pas activées pour autant). Une routine créée depuis une conversation est
 envoyée à cette conversation.
 
 Tu peux aussi demander « quelles sont mes routines ? », « mets en pause la vérification du soir » ou
@@ -151,6 +154,10 @@ routines:
     prompt: "Résume l'activité de la semaine de la maison à partir de l'historique des capteurs principaux."
     tier: cpu
 ```
+
+**Changement d'heure.** Une routine prévue à une heure qui n'existe pas (02:30 le jour du passage à
+l'heure d'été) s'exécute à 03:30 ; une heure qui existe deux fois (passage à l'heure d'hiver)
+s'exécute une seule fois, à la première occurrence.
 
 **Agent arrêté au mauvais moment.** Un rappel ponctuel manqué est envoyé au redémarrage avec la
 mention « en retard » s'il date de moins de `missed_grace_s` (2 h) ; au-delà, il est supprimé et tu

@@ -1,7 +1,7 @@
 name: Release
 
-# CD: every push to main publishes `edge` images; a `v*` tag (pushed, or created with a release
-# in the GitHub UI) publishes versioned images and a GitHub release.
+# CD: every push to main publishes `edge` images (except the CUDA one); a `v*` tag (pushed, or
+# created with a release in the GitHub UI) publishes every versioned image and a GitHub release.
 # Images go to the GitHub Container Registry of the repository owner.
 on:
   push:
@@ -16,24 +16,35 @@ permissions:
   packages: write
 
 jobs:
+  plan:
+    name: Plan images
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        # the CUDA image takes long to compile: publish it for versions (tag / release) and on
+        # demand only; pushes to main publish the other `edge` images (CI still builds it)
+        run: |
+          images='[
+            {"name": "agent", "file": "docker/agent.Dockerfile"},
+            {"name": "llama-cpu", "file": "docker/llama-cpu.Dockerfile"},
+            {"name": "whisper", "file": "docker/whisper.Dockerfile"},
+            {"name": "fakes", "file": "docker/fake-llm/Dockerfile"}'
+          if [ "${{ github.event_name }}" != "push" ] || [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            images="$images"', {"name": "llama-gpu", "file": "docker/llama-gpu.Dockerfile"}'
+          fi
+          echo "matrix={\"include\": $images]}" | tr -d '\n' >> "$GITHUB_OUTPUT"
+          echo >> "$GITHUB_OUTPUT"
+
   images:
     name: Publish ${{ matrix.name }}
+    needs: [plan]
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: agent
-            file: docker/agent.Dockerfile
-          - name: llama-cpu
-            file: docker/llama-cpu.Dockerfile
-          - name: llama-gpu
-            file: docker/llama-gpu.Dockerfile
-          - name: whisper
-            file: docker/whisper.Dockerfile
-          - name: fakes
-            file: docker/fake-llm/Dockerfile
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
       - name: Free disk space (CUDA image)

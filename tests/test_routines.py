@@ -76,7 +76,8 @@ async def test_create_reminder_from_chat_with_confirmation(tmp_path: Path) -> No
     assert routine is not None and routine.message == "Sortir les poubelles"
     assert routine.chat_ids == [111] and routine.created_by == "111"
     cfg = h.cfg_store.config
-    assert cfg.proactive.enabled  # turned on so that the routine actually runs
+    assert cfg.proactive.routines_active  # turned on so that the routine actually runs
+    assert not cfg.proactive.alerts_active  # ...without switching alerts on
     text = h.cfg_store.path.read_text(encoding="utf-8")
     assert "sortir_les_poubelles" in text and "Sortir les poubelles" in text  # persisted
     assert "C'est fait" in r.messages[-1]

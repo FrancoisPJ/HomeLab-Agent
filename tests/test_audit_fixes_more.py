@@ -195,3 +195,55 @@ def test_healthcheck_without_web_uses_the_heartbeat(
     assert healthcheck(cfg) == 0
     os.utime(beat, (time.time() - 300, time.time() - 300))
     assert healthcheck(cfg) == 1  # stale
+
+
+def test_fast_path_ignores_ambiguous_or_odd_names() -> None:
+    from homelab_agent.config.models import FastPathSection
+    from homelab_agent.core.fastpath import match
+    from homelab_agent.tools.homeassistant.client import EntityCache
+
+    cache = EntityCache()
+    cache.load(
+        [
+            {"entity_id": "light.salon", "state": "on", "attributes": {"friendly_name": "Salon"}},
+            {"entity_id": "light.copie", "state": "on", "attributes": {"friendly_name": "salon"}},
+            {"entity_id": "switch.tv", "state": "on", "attributes": {"friendly_name": "Télé"}},
+            {"entity_id": "switch.x", "state": "on",
+             "attributes": {"friendly_name": "nom beaucoup trop long pour etre un vrai nom de piece"}},
+        ]
+    )  # fmt: skip
+    assert match("éteins le salon", FastPathSection(), cache) is None  # two "salon": ambiguous
+    m = match("éteins le salon", FastPathSection(aliases={"salon": "light.salon"}), cache)
+    assert m is not None and m.entity_ids == ["light.salon"]  # alias wins
+    assert match("éteins la télé", FastPathSection(), cache) is not None
+    assert match("éteins la télé", FastPathSection(match_names=False), cache) is None
+    long_text = "allume nom beaucoup trop long pour etre un vrai nom de piece"
+    assert match(long_text, FastPathSection(), cache) is None
+
+
+def test_routine_times_across_dst_changes() -> None:
+    from zoneinfo import ZoneInfo
+
+    from homelab_agent.core.proactive import local_at
+
+    tz = ZoneInfo("Europe/Paris")
+    from datetime import date, time
+
+    # 2026-03-29: 02:00 -> 03:00 (02:30 does not exist): moved to 03:30 local = 01:30 UTC
+    spring = local_at(date(2026, 3, 29), time(2, 30), tz)
+    assert spring.astimezone(UTC) == datetime(2026, 3, 29, 1, 30, tzinfo=UTC)
+    assert (spring.hour, spring.minute) == (3, 30)
+    # 2026-10-25: 03:00 -> 02:00 (02:30 happens twice): the first one, 00:30 UTC
+    autumn = local_at(date(2026, 10, 25), time(2, 30), tz)
+    assert autumn.astimezone(UTC) == datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
+
+
+async def test_routine_runs_once_on_the_autumn_change(tmp_path: Path) -> None:
+    routines = [{"name": "nuit", "at": "02:30", "message": "ping"}]
+    h = await build_harness(tmp_path, proactive={"enabled": True, "routines": routines})
+    r = h.cfg_store.config.proactive.routines[0]
+    first = h.scheduler.next_run(r, datetime(2026, 10, 24, 23, 0, tzinfo=UTC))
+    assert first == datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
+    after = h.scheduler.next_run(r, first)
+    assert after == datetime(2026, 10, 26, 1, 30, tzinfo=UTC)  # next day, not 01:30 UTC same night
+    await h.close()

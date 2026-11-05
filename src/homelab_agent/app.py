@@ -135,8 +135,10 @@ class Services:
                 "tous les mardis à 20h » ou « tous les soirs à 23h, vérifie ce qui est allumé »."
             )
         lines = ["Routines :"]
-        if not self.cfg.proactive.enabled:
-            lines.insert(0, "⚠️ proactive.enabled est à false : rien ne s'exécute.")
+        if not self.cfg.proactive.routines_active:
+            lines.insert(
+                0, "⚠️ Routines désactivées (proactive.routines_enabled) : rien ne s'exécute."
+            )
         for r in routines:
             nxt = self.routine_manager.next_label(r)
             lines.append(f"• {describe(r)} — prochaine : {nxt}")
@@ -160,8 +162,8 @@ class Services:
         return await self.routine_manager.command(chat_id, arg)
 
     async def alerts_text(self, chat_id: str, arg: str) -> str:
-        if self.alerts is None or not self.cfg.proactive.enabled:
-            return "Les alertes sont désactivées (proactive.enabled)."
+        if self.alerts is None or not self.cfg.proactive.alerts_active:
+            return "Les alertes sont désactivées (proactive.alerts_enabled / enabled)."
         rules = self.cfg.proactive.alerts
         lines = [f"Alertes configurées : {len(rules)}"]
         lines += [f"• {r.name} ({r.severity}) sur {r.entity}" for r in rules]

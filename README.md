@@ -120,8 +120,8 @@ SDK `anthropic` et `google-genai`, ruff, mypy --strict, pytest.
   tests unitaires et d'intégration (faux backends), gitleaks sur tout l'historique, construction des
   4 images Docker (sans push), scénario e2e Compose.
 - **CD** ([release.yml](.github/workflows/release.yml)) : chaque push sur `main` publie des images
-  `edge` sur `ghcr.io/<propriétaire>/homelab-agent-*` ; un tag `vX.Y.Z` publie les images versionnées et
-  une release GitHub.
+  `edge` sur `ghcr.io/<propriétaire>/homelab-agent-*` (sauf l'image CUDA, longue à compiler) ; un tag
+  `vX.Y.Z` ou une release publie toutes les images versionnées, CUDA comprise.
 
 ## FAQ
 

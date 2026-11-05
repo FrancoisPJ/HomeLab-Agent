@@ -39,6 +39,7 @@ proactive:
       entity: "binary_sensor.fuite_*"
       state: "on"
       severity: critical
+      cooldown_s: 0               # dev/e2e: re-alert on every off -> on change
       message: "Fuite détectée : {name} ({area})"
       action: { label: "Couper la prise", domain: switch, service: turn_off, entity: switch.prise_bureau }
     - name: chaud

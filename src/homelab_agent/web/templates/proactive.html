@@ -2,7 +2,8 @@
 {% block content %}
 <h1>Domotique proactive</h1>
 <div class="card"><p>
-{% if cfg.proactive.enabled %}<span class="ok">● activée</span>{% else %}<span class="muted">● désactivée</span> (<code>proactive.enabled</code>){% endif %}
+alertes {% if cfg.proactive.alerts_active %}<span class="ok">● actives</span>{% else %}<span class="muted">● désactivées</span>{% endif %}
+· routines {% if cfg.proactive.routines_active %}<span class="ok">● actives</span>{% else %}<span class="muted">● désactivées</span>{% endif %}
 · destinataires : {{ (cfg.proactive.notify_chat_ids or cfg.telegram.allowed_user_ids)|join(", ") or "—" }}
 · heures calmes : {% if cfg.proactive.quiet_hours %}{{ cfg.proactive.quiet_hours.start }} → {{ cfg.proactive.quiet_hours.end }} (alertes critiques seulement){% else %}aucune{% endif %}</p>
 <p class="muted">Les règles se modifient dans la section <code>proactive</code> de la <a href="/config">configuration</a> ; elles s'appliquent sans redémarrage.</p></div>

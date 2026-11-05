@@ -15,7 +15,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from fnmatch import fnmatchcase
 from zoneinfo import ZoneInfo
 
@@ -46,6 +46,22 @@ def _utcnow() -> datetime:
 def _hhmm(value: str) -> time:
     h, m = value.split(":")
     return time(int(h), int(m))
+
+
+def local_at(day: date, at: time, tz: ZoneInfo) -> datetime:
+    """``day`` at ``at`` in ``tz``, DST-safe.
+
+    A time skipped by the spring change (e.g. 02:30) is moved to the first valid time after it;
+    a time repeated by the autumn change runs once (first occurrence).
+    """
+    naive = datetime.combine(day, at)
+    aware = naive.replace(tzinfo=tz, fold=0)
+    roundtrip = aware.astimezone(UTC).astimezone(tz)
+    if roundtrip.replace(tzinfo=None) != naive:
+        # non-existent local time: fold=0 uses the pre-change offset, which lands just after
+        # the gap once normalised (02:30 -> 03:30)
+        return roundtrip
+    return aware
 
 
 def in_quiet_hours(section: ProactiveSection, local: datetime) -> bool:
@@ -133,7 +149,7 @@ class AlertEngine:
             self._attached = True
 
     def rules_for(self, entity_id: str) -> list[AlertRule]:
-        if not self.section.enabled:
+        if not self.section.alerts_active:
             return []
         return [r for r in self.section.alerts if fnmatchcase(entity_id, r.entity)]
 
@@ -284,13 +300,11 @@ class RoutineScheduler:
         local = (after or self.clock()).astimezone(tz)
         at = _hhmm(routine.at)
         if routine.date is not None:
-            once = datetime.combine(
-                datetime.strptime(routine.date, "%Y-%m-%d").date(), at, tzinfo=tz
-            )
+            once = local_at(datetime.strptime(routine.date, "%Y-%m-%d").date(), at, tz)
             return once.astimezone(UTC) if once > local else None
         for day in range(8):
             d = (local + timedelta(days=day)).date()
-            candidate = datetime.combine(d, at, tzinfo=tz)
+            candidate = local_at(d, at, tz)
             if candidate > local and WEEKDAYS[candidate.weekday()] in routine.days:
                 return candidate.astimezone(UTC)
         return None
@@ -311,9 +325,7 @@ class RoutineScheduler:
         if routine.date is None:
             return None
         tz = ZoneInfo(self._cfg().agent.timezone)
-        local = datetime.combine(
-            datetime.strptime(routine.date, "%Y-%m-%d").date(), _hhmm(routine.at), tzinfo=tz
-        )
+        local = local_at(datetime.strptime(routine.date, "%Y-%m-%d").date(), _hhmm(routine.at), tz)
         return local.astimezone(UTC)
 
     async def catch_up(self) -> list[str]:
@@ -397,7 +409,7 @@ class RoutineScheduler:
     def start(self, tick_s: float = 30.0) -> None:
         async def loop() -> None:
             try:
-                if self.section.enabled:
+                if self.section.routines_active:
                     await self.catch_up()
             except Exception:
                 log.exception("routine catch-up failed")
@@ -405,7 +417,7 @@ class RoutineScheduler:
             while True:
                 await asyncio.sleep(tick_s)
                 now = self.clock()
-                if self.section.enabled:
+                if self.section.routines_active:
                     for routine in self.due(now, previous):
                         try:
                             await self.run(routine)

@@ -212,9 +212,10 @@ class RoutineManager:
         current = self.routines
         if len(current) >= self.store.config.proactive.max_routines:
             raise RoutineError("nombre maximal de routines atteint (proactive.max_routines)")
-        if not self.store.config.proactive.enabled:
+        if not self.store.config.proactive.routines_active:
+            # turn routines on, without switching alerts on as a side effect
             try:
-                self.store.update_section(["proactive", "enabled"], True)
+                self.store.update_section(["proactive", "routines_enabled"], True)
             except ConfigError as exc:
                 raise RoutineError(str(exc)) from exc
         self._save([*current, routine])

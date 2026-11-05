@@ -118,6 +118,11 @@ class FastPathSection(_Base):
         default_factory=dict,
         description="Spoken name -> entity_id, e.g. {'salon': 'light.salon'}.",
     )
+    match_names: bool = Field(
+        True,
+        description="Also match Home Assistant friendly names (only when exactly one entity "
+        "has that name). false = aliases only.",
+    )
 
 
 class GpuQualitySection(_Base):
@@ -443,6 +448,12 @@ class Routine(_Base):
 
 class ProactiveSection(_Base):
     enabled: bool = False
+    alerts_enabled: bool | None = Field(
+        None, description="Override for alerts only (null = follow `enabled`)."
+    )
+    routines_enabled: bool | None = Field(
+        None, description="Override for routines only (null = follow `enabled`)."
+    )
     notify_chat_ids: list[int] = Field(
         default_factory=list, description="Recipients; default: telegram.allowed_user_ids."
     )
@@ -464,6 +475,14 @@ class ProactiveSection(_Base):
         description="A one-off routine missed while the agent was down still runs, marked "
         "late, if less than this old; older ones are removed with a notice.",
     )
+
+    @property
+    def alerts_active(self) -> bool:
+        return self.enabled if self.alerts_enabled is None else self.alerts_enabled
+
+    @property
+    def routines_active(self) -> bool:
+        return self.enabled if self.routines_enabled is None else self.routines_enabled
 
     @model_validator(mode="after")
     def _unique(self) -> ProactiveSection:

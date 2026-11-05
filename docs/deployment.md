@@ -40,7 +40,8 @@ git pull && make restart
 ```
 
 Images pré-construites : la CD publie `ghcr.io/<propriétaire>/homelab-agent-agent:edge` (et
-`llama-cpu`, `llama-gpu`) ; remplacez `build:` par ces `image:` si vous ne voulez pas compiler.
+`llama-cpu`, `whisper`) à chaque push sur `main`, et toutes les images, dont `llama-gpu`, à chaque
+version (`:0.2.0`…) ; remplacez `build:` par ces `image:` si vous ne voulez pas compiler.
 Attention : l'image GPU publiée est compilée pour `CUDA_ARCHITECTURES=86` et CUDA 12.2.
 
 ## 4. Sauvegarder

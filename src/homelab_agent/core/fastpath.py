@@ -43,6 +43,7 @@ _SERVICES: dict[tuple[str, str], str] = {
 }
 
 MAX_LEN = 80
+MAX_NAME_LEN = 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,16 +68,23 @@ def match(text: str, section: FastPathSection, cache: EntityCache) -> FastPathMa
     for spoken, eid in section.aliases.items():
         if f" {normalize(spoken)} " in norm:
             candidates[eid] = spoken
-    if not candidates:
+    from_names = False
+    if not candidates and section.match_names:
+        from_names = True
         for e in cache.entities.values():
             name = normalize(e.name)
-            if len(name) >= 3 and f" {name} " in norm:
+            # names come from Home Assistant (untrusted): ignore odd ones
+            if not 3 <= len(name) <= MAX_NAME_LEN or "\n" in e.name:
+                continue
+            if f" {name} " in norm:
                 candidates[e.entity_id] = e.name
     # keep the longest names only (e.g. "lumiere salon" beats "salon")
     if not candidates:
         return None
     longest = max(len(v) for v in candidates.values())
     picked = {k: v for k, v in candidates.items() if len(v) == longest}
+    if from_names and len(picked) != 1:
+        return None  # two entities share that name: ambiguous (or a look-alike), ask the LLM
     domains = {eid.split(".", 1)[0] for eid in picked}
     if len(domains) != 1:
         return None
