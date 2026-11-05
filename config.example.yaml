@@ -160,7 +160,12 @@ proactive:
   #    for_s: 900
   #    cooldown_s: 7200
   #    message: "🌡️ {name} : {state}{unit}"
-  routines: []
+  chat_edit: true               # l'agent peut créer/modifier des routines depuis Telegram (avec confirmation)
+  routines: []                  # se remplit aussi quand tu dis « rappelle-moi … tous les mardis à 20h »
+  #  - name: poubelles            # rappel simple, sans LLM
+  #    at: "20:00"
+  #    days: [tue]
+  #    message: "Sortir les poubelles 🗑️"
   #  - name: verif_soir           # sans LLM : liste ce qui est encore allumé/ouvert
   #    at: "23:00"
   #    check: { domains: [light, switch, cover], states: ["on", "open"] }

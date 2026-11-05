@@ -38,6 +38,9 @@ async def services(tmp_path: Path) -> Services:
         lambda: svc.cfg, h.orchestrator.handle, lambda: svc.notifier, h.ha, h.db
     )
     svc.alerts = AlertEngine(lambda: svc.cfg, h.ha, lambda: svc.notifier, h.db)
+    from homelab_agent.core.routines import RoutineManager
+
+    svc.routine_manager = RoutineManager(svc.store, svc.routines)
     return svc
 
 
@@ -154,3 +157,17 @@ def test_proactive_page_and_run(client: TestClient) -> None:
     assert r.status_code == 303
     assert client.post("/proactive/run/nope").status_code == 404
     assert svc.routines is not None
+
+
+def test_proactive_routine_buttons(client: TestClient) -> None:
+    login(client)
+    svc: Services = client.svc  # type: ignore[attr-defined]
+    assert svc.routine_manager is not None
+    client.post("/proactive/routine/soir/off")
+    assert svc.routine_manager.get("soir").enabled is False  # type: ignore[union-attr]
+    assert "Activer" in client.get("/proactive").text
+    client.post("/proactive/routine/soir/on")
+    assert svc.routine_manager.get("soir").enabled is True  # type: ignore[union-attr]
+    client.post("/proactive/routine/soir/delete")
+    assert svc.routine_manager.get("soir") is None
+    assert client.post("/proactive/routine/soir/delete").status_code == 404

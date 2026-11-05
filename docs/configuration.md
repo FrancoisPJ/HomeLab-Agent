@@ -91,7 +91,9 @@ Messages vocaux Telegram : `enabled`, `stt_url`, `language`, `max_duration_s`, `
 `timeout_s`, `stt_model`, `api_key_env`. Voir [voice.md](voice.md).
 
 ### `proactive`
-Alertes sur événements Home Assistant et routines planifiées. Voir [proactive.md](proactive.md).
+Alertes sur événements Home Assistant et routines planifiées (`enabled`, `notify_chat_ids`,
+`quiet_hours`, `alerts`, `routines`, `action_ttl_s`, `chat_edit`, `max_routines`). Les routines
+peuvent être créées depuis Telegram, après confirmation. Voir [proactive.md](proactive.md).
 
 ### `models`
 Les GGUF servis par llama.cpp. Voir [models.md](models.md).

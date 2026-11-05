@@ -191,3 +191,24 @@ def test_11_voice_note_drives_the_house() -> None:
     wait_text(lambda t: t == "🎤 « Éteins le salon »", since)
     wait_text(lambda t: t.startswith("✅ light.turn_off"), since)
     assert ha_calls()[n:][0]["service"] == "turn_off"
+
+
+def test_12_create_a_reminder_from_the_chat() -> None:
+    args = '{"what": "reminder", "at": "20h", "days": "mardi", "text": "Sortir les poubelles"}'
+    since = send(f"[[tool:routine_create {args}]]")
+    sent = wait_text(lambda t: t.startswith("Créer la routine"), since)
+    question = next(m for m in sent if m["text"].startswith("Créer la routine"))
+    assert "mar à 20:00" in question["text"]
+    yes = question["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+    with client() as c:
+        c.post(
+            f"{TG}/_test/callback",
+            json={"user_id": USER, "message_id": question["message_id"], "data": yes},
+        )
+    wait_text(lambda t: "C'est fait" in t, since)
+    since = send("/routines")
+    wait_text(lambda t: "sortir_les_poubelles" in t and "prochaine : mar" in t.lower(), since)
+    since = send("/run sortir_les_poubelles")
+    wait_text(lambda t: t == "⏰ Sortir les poubelles", since)
+    since = send("/routine delete sortir_les_poubelles")
+    wait_text(lambda t: "supprimée" in t, since)

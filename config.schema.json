@@ -992,6 +992,19 @@
           "minimum": 60,
           "title": "Action Ttl S",
           "type": "integer"
+        },
+        "chat_edit": {
+          "default": true,
+          "description": "Let the agent create / change routines from a conversation (always behind a Yes/No confirmation).",
+          "title": "Chat Edit",
+          "type": "boolean"
+        },
+        "max_routines": {
+          "default": 50,
+          "description": "Upper bound on the number of routines.",
+          "minimum": 1,
+          "title": "Max Routines",
+          "type": "integer"
         }
       },
       "title": "ProactiveSection",
@@ -1018,6 +1031,7 @@
     },
     "Routine": {
       "additionalProperties": false,
+      "description": "Something to do at a local time: a check report, a prompt for the agent or a reminder.\n\nRepeats on ``days``; with ``date`` it runs once that day and is then removed.",
       "properties": {
         "name": {
           "pattern": "^[a-z0-9_]+$",
@@ -1045,6 +1059,20 @@
           },
           "title": "Days",
           "type": "array"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "YYYY-MM-DD: run once, then remove.",
+          "title": "Date"
         },
         "enabled": {
           "default": true,
@@ -1075,6 +1103,19 @@
           "description": "Request sent to the agent as if you wrote it.",
           "title": "Prompt"
         },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reminder sent as is (no LLM).",
+          "title": "Message"
+        },
         "tier": {
           "$ref": "#/$defs/Tier",
           "default": "gpu",
@@ -1085,6 +1126,27 @@
           "description": "check: stay silent when nothing matches.",
           "title": "Only If Found",
           "type": "boolean"
+        },
+        "chat_ids": {
+          "description": "Recipients; default: proactive recipients.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Chat Ids",
+          "type": "array"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set when created from a conversation.",
+          "title": "Created By"
         }
       },
       "required": [

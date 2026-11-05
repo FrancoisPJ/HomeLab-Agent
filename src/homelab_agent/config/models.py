@@ -377,19 +377,39 @@ class RoutineCheck(_Base):
 
 
 class Routine(_Base):
+    """Something to do at a local time: a check report, a prompt for the agent or a reminder.
+
+    Repeats on ``days``; with ``date`` it runs once that day and is then removed.
+    """
+
     name: str = Field(pattern=r"^[a-z0-9_]+$")
     at: str = Field(pattern=_HHMM, description="Local time (agent.timezone), HH:MM.")
     days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS))
+    date: str | None = Field(
+        None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="YYYY-MM-DD: run once, then remove."
+    )
     enabled: bool = True
     check: RoutineCheck | None = None
     prompt: str | None = Field(None, description="Request sent to the agent as if you wrote it.")
+    message: str | None = Field(None, description="Reminder sent as is (no LLM).")
     tier: Tier = Field(Tier.GPU, description="Tier for prompt routines (cpu = background job).")
     only_if_found: bool = Field(True, description="check: stay silent when nothing matches.")
+    chat_ids: list[int] = Field(
+        default_factory=list, description="Recipients; default: proactive recipients."
+    )
+    created_by: str | None = Field(None, description="Set when created from a conversation.")
+
+    @property
+    def kind(self) -> str:
+        return "check" if self.check else ("prompt" if self.prompt else "message")
 
     @model_validator(mode="after")
     def _kind(self) -> Routine:
-        if (self.check is None) == (self.prompt is None):
-            raise ValueError(f"routine '{self.name}' needs exactly one of check or prompt")
+        kinds = [k for k in (self.check, self.prompt, self.message) if k is not None]
+        if len(kinds) != 1:
+            raise ValueError(f"routine '{self.name}' needs exactly one of check, prompt or message")
+        if not self.days and self.date is None:
+            raise ValueError(f"routine '{self.name}' has no day")
         return self
 
 
@@ -404,6 +424,12 @@ class ProactiveSection(_Base):
     alerts: list[AlertRule] = Field(default_factory=list)
     routines: list[Routine] = Field(default_factory=list)
     action_ttl_s: int = Field(3600, ge=60, description="How long alert buttons stay usable.")
+    chat_edit: bool = Field(
+        True,
+        description="Let the agent create / change routines from a conversation "
+        "(always behind a Yes/No confirmation).",
+    )
+    max_routines: int = Field(50, ge=1, description="Upper bound on the number of routines.")
 
     @model_validator(mode="after")
     def _unique(self) -> ProactiveSection:

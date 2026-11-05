@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from homelab_agent.config.loader import ConfigError
 from homelab_agent.config.models import AppConfig, Policy, Tier
 from homelab_agent.core.router import TIER_LABELS
+from homelab_agent.core.routines import fr_when
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.web.auth import COOKIE, check_password, check_session, make_session
 
@@ -268,9 +269,18 @@ def create_app(services: Services) -> FastAPI:
         routines = []
         for r in services.cfg.proactive.routines:
             nxt = services.routines.next_run(r) if services.routines else None
-            routines.append({"r": r, "next": nxt.astimezone(tz) if nxt and r.enabled else None})
+            when = fr_when(nxt.astimezone(tz)) if nxt and r.enabled else None
+            routines.append({"r": r, "next": when})
         events = list(reversed(services.alerts.events[-50:])) if services.alerts else []
         return render(request, "proactive.html", routines=routines, events=events, tz=tz, ran=None)
+
+    @app.post("/proactive/routine/{name}/{action}")
+    async def proactive_routine(name: str, action: str) -> Response:
+        manager = services.routine_manager
+        if manager is None or manager.get(name) is None or action not in ("on", "off", "delete"):
+            raise HTTPException(404, "unknown routine or action")
+        await manager.command("", f"{action} {name}")
+        return RedirectResponse("/proactive", status_code=303)
 
     @app.post("/proactive/run/{name}", response_class=HTMLResponse)
     async def proactive_run(request: Request, name: str) -> Response:

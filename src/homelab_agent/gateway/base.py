@@ -16,6 +16,7 @@ class IncomingMessage:
     chat_id: str
     text: str
     forced_tier: Tier | None = None
+    origin: str = "user"  # "user" or "routine" (routines may not edit routines)
 
 
 class StreamHandle(Protocol):

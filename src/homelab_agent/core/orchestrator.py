@@ -302,6 +302,8 @@ class Orchestrator:
             exclude.add("internal")
         if self.ha is None or not cfg.home_assistant.enabled:
             exclude.add("ha")
+        if msg.origin != "user" or not cfg.proactive.chat_edit:
+            exclude.add("routine_edit")
         tools = self.registry.specs(exclude_tags=exclude)
         messages = await self.build_messages(msg.chat_id, tier, msg.text, backend, tools)
         ctx = ToolContext(

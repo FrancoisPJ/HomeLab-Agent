@@ -80,18 +80,55 @@ alerts:
 
 ## Routines
 
+### Les créer depuis Telegram
+
+Écris simplement ce que tu veux, en langage naturel (ou en vocal) :
+
+- « rappelle-moi de sortir les poubelles tous les mardis à 20h » → **rappel** (texte envoyé tel
+  quel, sans LLM) ;
+- « demain à 8h rappelle-moi le dentiste » → rappel **ponctuel** : il s'exécute une fois puis
+  disparaît ;
+- « tous les soirs à 23h, vérifie ce qui est encore allumé » → **vérification** sans LLM ;
+- « en semaine à 7h30, fais-moi un point sur la maison » → **demande** traitée par l'agent.
+
+L'agent prépare la routine puis demande **toujours** une confirmation (✅ Oui / ❌ Non) avec son
+résumé : « Créer la routine sortir_les_poubelles : rappel « Sortir les poubelles », mar à 20:00 ? ».
+Après validation, elle est écrite dans `config.yaml` (source de vérité unique) et active tout de
+suite ; `proactive.enabled` passe à `true` si besoin. Une routine créée depuis une conversation est
+envoyée à cette conversation.
+
+Tu peux aussi demander « quelles sont mes routines ? », « mets en pause la vérification du soir » ou
+« supprime le rappel poubelles » (toujours avec confirmation), ou utiliser les commandes :
+
+| Commande | Effet |
+|---|---|
+| `/routines` | liste et prochaine exécution |
+| `/run <nom>` | exécuter maintenant |
+| `/routine off <nom>` / `/routine on <nom>` | mettre en pause / réactiver |
+| `/routine delete <nom>` | supprimer |
+
+Garde-fous : confirmation obligatoire pour toute création, pause ou suppression demandée au LLM ;
+une routine de type « demande » **ne peut pas** créer ou modifier de routines (pas de planification
+qui se reproduit) ; nombre maximal `proactive.max_routines` (50) ; `proactive.chat_edit: false`
+retire complètement ces outils au LLM. Chaque exécution est inscrite au journal d'audit.
+
+### Les écrire dans la configuration
+
 | Clé | Rôle |
 |---|---|
 | `name` | identifiant |
 | `at` | heure locale `HH:MM` (fuseau `agent.timezone`) |
 | `days` | jours (`mon` … `sun`), tous par défaut |
+| `date` | `AAAA-MM-JJ` : exécution unique ce jour-là, puis suppression automatique |
 | `check` | rapport **sans LLM** : entités lisibles des `domains` dont l'état est dans `states` (et `entities` en motifs, facultatif) |
 | `only_if_found` | `check` : rester silencieux si rien ne correspond (par défaut) |
 | `prompt` | demande envoyée à l'agent comme si tu l'écrivais |
+| `message` | rappel envoyé tel quel (« ⏰ … »), sans LLM |
+| `chat_ids` | destinataires propres (sinon ceux de `proactive`) |
 | `tier` | niveau pour `prompt` : `gpu` (réponse immédiate), `cpu` (tâche de fond), `cloud` |
 | `enabled` | désactiver sans supprimer |
 
-Une routine a **soit** `check`, **soit** `prompt`.
+Une routine a **un seul** des trois : `check`, `prompt` ou `message`.
 
 ```yaml
 routines:
@@ -103,6 +140,10 @@ routines:
     days: [mon, tue, wed, thu, fri]
     prompt: "Point rapide : températures, ce qui est allumé ou ouvert, et s'il faut aérer."
     tier: gpu
+  - name: poubelles
+    at: "20:00"
+    days: [tue]
+    message: "Sortir les poubelles 🗑️"
   - name: rapport_hebdo
     at: "10:00"
     days: [sun]
@@ -120,6 +161,7 @@ jamais dans un rapport.
 | `/alerts` | alertes configurées et derniers déclenchements |
 | `/routines` | routines et prochaine exécution |
 | `/run <nom>` | lancer une routine tout de suite (pour tester) |
+| `/routine on\|off\|delete <nom>` | gérer une routine |
 
 ## Recette sur le vrai matériel
 
@@ -127,3 +169,5 @@ jamais dans un rapport.
 - [ ] La nuit, une alerte `warning` ne réveille personne ; une `critical` passe.
 - [ ] Le bouton d'action agit une fois ; une entité en `read_only` le fait échouer proprement.
 - [ ] `/run verif_soir` liste ce qui est allumé.
+- [ ] « rappelle-moi de … tous les mardis à 20h » : le modèle rapide prépare la bonne routine
+      (heure, jours, texte) ; noter les échecs pour choisir le modèle (`bench.py`).

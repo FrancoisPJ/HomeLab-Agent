@@ -54,6 +54,12 @@ def main(argv: list[str] | None = None) -> int:
         uvicorn.run(create_fake(args.service), host="0.0.0.0", port=args.port, log_level="warning")
         return 0
 
+    template = os.environ.get("HLA_CONFIG_TEMPLATE")
+    if template and not os.path.exists(args.config) and os.path.exists(template):
+        import shutil
+
+        shutil.copyfile(template, args.config)  # first start: writable copy of the template
+
     try:
         cfg = load_config(args.config)
     except ConfigError as exc:

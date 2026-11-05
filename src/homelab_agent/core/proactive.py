@@ -257,8 +257,10 @@ class RoutineScheduler:
         ha: HomeAssistantService | None,
         db: Database,
         clock: Clock = _utcnow,
+        on_once_done: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._cfg = get_config
+        self.on_once_done = on_once_done
         self.handler = handler
         self._notifier = notifier
         self.ha = ha
@@ -279,6 +281,11 @@ class RoutineScheduler:
         tz = ZoneInfo(self._cfg().agent.timezone)
         local = (after or self.clock()).astimezone(tz)
         at = _hhmm(routine.at)
+        if routine.date is not None:
+            once = datetime.combine(
+                datetime.strptime(routine.date, "%Y-%m-%d").date(), at, tzinfo=tz
+            )
+            return once.astimezone(UTC) if once > local else None
         for day in range(8):
             d = (local + timedelta(days=day)).date()
             candidate = datetime.combine(d, at, tzinfo=tz)
@@ -300,20 +307,33 @@ class RoutineScheduler:
     async def run(self, routine: Routine, chats: list[str] | None = None) -> list[str]:
         """Run one routine now and return the messages sent (check routines)."""
         cfg = self._cfg()
-        chats = chats or recipients(cfg)
+        chats = chats or [str(c) for c in routine.chat_ids] or recipients(cfg)
         self._last_run[routine.name] = self.clock()
         METRICS.inc("routines_total", routine=routine.name)
+        sent: list[str] = []
         if routine.prompt is not None:
             for chat in chats:
-                msg = IncomingMessage(chat, chat, routine.prompt, forced_tier=routine.tier)
+                msg = IncomingMessage(
+                    chat, chat, routine.prompt, forced_tier=routine.tier, origin="routine"
+                )
                 await self.handler(msg, self._notifier().replier_for(chat))
-            return []
-        text = self.check_report(routine)
-        if text is None:
-            return []
-        for chat in chats:
-            await self._notifier().notify(chat, text)
-        return [text]
+        else:
+            text = (
+                f"⏰ {routine.message}"
+                if routine.message is not None
+                else self.check_report(routine)
+            )
+            if text is not None:
+                for chat in chats:
+                    await self._notifier().notify(chat, text)
+                sent = [text]
+        await self.db.audit(
+            requester="proactive", tier="routine", model="-", tool=f"routine:{routine.name}",
+            params={"kind": routine.kind, "chats": chats}, outcome="ok",
+        )  # fmt: skip
+        if routine.date is not None and self.on_once_done is not None:
+            await self.on_once_done(routine.name)
+        return sent
 
     def check_report(self, routine: Routine) -> str | None:
         assert routine.check is not None

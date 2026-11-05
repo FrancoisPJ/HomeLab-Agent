@@ -20,6 +20,7 @@ from homelab_agent.core.jobs import JobQueue
 from homelab_agent.core.orchestrator import Orchestrator
 from homelab_agent.core.proactive import AlertEngine, RoutineScheduler
 from homelab_agent.core.router import TIER_LABELS, HealthTracker, Router
+from homelab_agent.core.routines import RoutineManager, describe, register_routine_tools
 from homelab_agent.gateway.base import ActionButton, BufferedReplier, Notifier, Replier
 from homelab_agent.gateway.telegram import TelegramFrontend
 from homelab_agent.llm.base import LLMBackend
@@ -65,6 +66,7 @@ class Services:
     notifier: Notifier = field(default_factory=LogNotifier)
     alerts: AlertEngine | None = None
     routines: RoutineScheduler | None = None
+    routine_manager: RoutineManager | None = None
     stt: SpeechToText | None = None
     started: bool = False
 
@@ -122,16 +124,22 @@ class Services:
 
     # ------------------------------------------------------------ proactive
     async def routines_text(self, chat_id: str, arg: str) -> str:
-        if self.routines is None or not self.cfg.proactive.enabled:
-            return "Les routines sont désactivées (proactive.enabled)."
+        if self.routine_manager is None:
+            return "Les routines sont indisponibles."
+        routines = self.routine_manager.routines
+        if not routines:
+            return (
+                "Aucune routine. Écris par exemple : « rappelle-moi de sortir les poubelles "
+                "tous les mardis à 20h » ou « tous les soirs à 23h, vérifie ce qui est allumé »."
+            )
         lines = ["Routines :"]
-        tz = ZoneInfo(self.cfg.agent.timezone)
-        for r in self.cfg.proactive.routines:
-            nxt = self.routines.next_run(r)
-            when = nxt.astimezone(tz).strftime("%a %d/%m %H:%M") if nxt and r.enabled else "—"
-            kind = "vérification" if r.check else f"demande ({r.tier.value})"
-            lines.append(f"• {r.name} — {r.at} — {kind} — prochaine : {when}")
-        return "\n".join(lines) if len(lines) > 1 else "Aucune routine configurée."
+        if not self.cfg.proactive.enabled:
+            lines.insert(0, "⚠️ proactive.enabled est à false : rien ne s'exécute.")
+        for r in routines:
+            nxt = self.routine_manager.next_label(r)
+            lines.append(f"• {describe(r)} — prochaine : {nxt}")
+        lines.append("/run <nom> pour lancer, /routine on|off|delete <nom> pour gérer.")
+        return "\n".join(lines)
 
     async def run_routine(self, chat_id: str, arg: str) -> str:
         if self.routines is None:
@@ -143,6 +151,11 @@ class Services:
         if routine.check is not None and not sent:
             return f"✅ {routine.name} : rien à signaler."
         return f"▶️ {routine.name} lancée." if routine.prompt else "✔️"
+
+    async def routine_cmd(self, chat_id: str, arg: str) -> str:
+        if self.routine_manager is None:
+            return "Les routines sont indisponibles."
+        return await self.routine_manager.command(chat_id, arg)
 
     async def alerts_text(self, chat_id: str, arg: str) -> str:
         if self.alerts is None or not self.cfg.proactive.enabled:
@@ -191,6 +204,14 @@ async def build_services(store: ConfigStore, *, start_background: bool = True) -
     services.routines = RoutineScheduler(
         lambda: store.config, orch.handle, lambda: services.notifier, ha, db
     )
+    services.routine_manager = RoutineManager(store, services.routines)
+    manager = services.routine_manager
+
+    async def once_done(name: str) -> None:
+        manager.remove(name)  # one-off routine: remove it once it has run
+
+    services.routines.on_once_done = once_done
+    register_routine_tools(registry, manager)
     if ha is not None:
         services.alerts = AlertEngine(lambda: store.config, ha, lambda: services.notifier, db)
         services.alerts.attach()
@@ -281,6 +302,7 @@ async def run(config_path: str) -> None:
             commands={
                 "routines": ("routines planifiées", services.routines_text),
                 "run": ("lancer une routine maintenant", services.run_routine),
+                "routine": ("activer / désactiver / supprimer une routine", services.routine_cmd),
                 "alerts": ("alertes et derniers déclenchements", services.alerts_text),
             },
             voice=lambda: store.config.voice,

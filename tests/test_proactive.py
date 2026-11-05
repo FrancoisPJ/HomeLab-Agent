@@ -241,7 +241,7 @@ def test_routine_validation() -> None:
     import pytest
     from pydantic import ValidationError
 
-    with pytest.raises(ValidationError, match="exactly one of check or prompt"):
+    with pytest.raises(ValidationError, match="exactly one of check, prompt or message"):
         Routine(name="x", at="10:00")
     with pytest.raises(ValidationError):
         Routine(name="x", at="25:00", prompt="p")

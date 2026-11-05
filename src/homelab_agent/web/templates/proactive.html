@@ -22,10 +22,14 @@
 {% else %}<tr><td colspan="5" class="muted">Rien depuis le démarrage.</td></tr>{% endfor %}</table></div>
 
 <div class="card"><h2>Routines</h2>
-<table><tr><th>Nom</th><th>Heure</th><th>Jours</th><th>Type</th><th>Prochaine</th><th></th></tr>
-{% for item in routines %}{% set r = item.r %}<tr><td><code>{{ r.name }}</code></td><td>{{ r.at }}</td><td>{{ r.days|join(" ") }}</td>
-<td>{% if r.check %}vérification {{ r.check.domains|join("/") }} ∈ {{ r.check.states|join("/") }}{% else %}demande ({{ r.tier.value }}) : <span class="muted">{{ r.prompt[:80] }}</span>{% endif %}</td>
-<td>{{ item.next.strftime('%a %d/%m %H:%M') if item.next else '—' }}</td>
-<td><form method="post" action="/proactive/run/{{ r.name }}"><button class="ghost">Lancer</button></form></td></tr>
+<p class="muted">Crée-les depuis Telegram en langage naturel (« rappelle-moi de sortir les poubelles tous les mardis à 20h ») ou dans la configuration.</p>
+<table><tr><th>Nom</th><th>Heure</th><th>Quand</th><th>Type</th><th>Prochaine</th><th></th></tr>
+{% for item in routines %}{% set r = item.r %}<tr class="{{ '' if r.enabled else 'muted' }}"><td><code>{{ r.name }}</code>{% if r.created_by %}<br><span class="muted" style="font-size:.8rem">créée depuis le chat</span>{% endif %}</td><td>{{ r.at }}</td>
+<td>{% if r.date %}une fois, le {{ r.date }}{% else %}{{ r.days|join(" ") }}{% endif %}</td>
+<td>{% if r.check %}vérification {{ r.check.domains|join("/") }} ∈ {{ r.check.states|join("/") }}{% elif r.prompt %}demande ({{ r.tier.value }}) : <span class="muted">{{ r.prompt[:80] }}</span>{% else %}rappel : <span class="muted">{{ r.message[:80] }}</span>{% endif %}</td>
+<td>{{ item.next or '—' }}</td>
+<td class="inline"><form method="post" action="/proactive/run/{{ r.name }}"><button class="ghost">Lancer</button></form>
+<form method="post" action="/proactive/routine/{{ r.name }}/{{ 'off' if r.enabled else 'on' }}"><button class="ghost">{{ 'Pause' if r.enabled else 'Activer' }}</button></form>
+<form method="post" action="/proactive/routine/{{ r.name }}/delete"><button class="ghost">Supprimer</button></form></td></tr>
 {% else %}<tr><td colspan="6" class="muted">Aucune routine.</td></tr>{% endfor %}</table></div>
 {% endblock %}

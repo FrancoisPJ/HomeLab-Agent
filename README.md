@@ -14,7 +14,8 @@ Chaque demande est envoyée au moteur le plus adapté :
 
 Il pilote **Home Assistant** (lecture et contrôle), avec des **permissions appliquées par le code**
 et réglables dans un **panneau web**. Il peut aussi **prévenir** (fuite, porte ouverte, température)
-avec un bouton d'action, et lancer des **routines** à heure fixe ([docs/proactive.md](docs/proactive.md)).
+avec un bouton d'action, et lancer des **routines** à heure fixe, que tu crées en lui parlant
+(« rappelle-moi de sortir les poubelles tous les mardis à 20h ») ([docs/proactive.md](docs/proactive.md)).
 Les **messages vocaux** Telegram sont transcrits en local avec whisper.cpp ([docs/voice.md](docs/voice.md)).
 
 > ⚠️ Le projet a été développé et testé **sans accès au matériel réel** : la CI utilise des faux
@@ -98,7 +99,8 @@ Référence complète : [docs/configuration.md](docs/configuration.md). Vérific
 ## Commandes Telegram
 
 `/status`, `/model`, `/cloud <texte>` (forcer le cloud), `/deep <texte>` (forcer le CPU, réponse
-différée), `/jobs`, `/reset`, `/alerts`, `/routines`, `/run <routine>`, `/help`. Tout autre message part dans l'entonnoir de routage.
+différée), `/jobs`, `/reset`, `/alerts`, `/routines`, `/run <routine>`,
+`/routine on|off|delete <routine>`, `/help`. Tout autre message part dans l'entonnoir de routage.
 
 ## Développement
 

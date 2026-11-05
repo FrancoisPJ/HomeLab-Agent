@@ -26,7 +26,7 @@ des boutons par un autre utilisateur sont aussi ignorés.
 | `/deep <texte>` | force le CPU : accusé immédiat, réponse plus tard |
 | `/jobs` | dernières tâches de la conversation |
 | `/reset` | efface l'historique de la conversation |
-| `/alerts`, `/routines`, `/run <nom>` | domotique proactive, voir [proactive.md](proactive.md) |
+| `/alerts`, `/routines`, `/run <nom>`, `/routine on\|off\|delete <nom>` | domotique proactive, voir [proactive.md](proactive.md) |
 
 ## Streaming et limites
 
