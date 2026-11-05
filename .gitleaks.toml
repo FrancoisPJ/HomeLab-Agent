@@ -11,7 +11,5 @@ regexes = [
   '''dev-password-123''',
   '''fake-ha-token''',
   '''correct-horse-battery''',
-  '''AAH4fakefakefakefakefakefakefake12''',
-  '''sk-ant-api03-abcdefghijklmnop''',
 ]
 paths = ['''uv\.lock''']

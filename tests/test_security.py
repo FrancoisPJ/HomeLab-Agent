@@ -122,14 +122,15 @@ async def test_targets_cannot_be_smuggled_in_data(tmp_path: Path) -> None:
 
 def test_secret_masking(caplog: object, monkeypatch: object) -> None:
     masker = SecretMasker(["super-secret-value"])
-    text = masker.mask(
-        "token=super-secret-value auth: Bearer abc.def-123 tg=123456789:AAH4fakefakefakefakefakefakefake12"
-    )
+    # fake credentials are assembled at runtime so that no secret-shaped literal sits in the
+    # repository (GitHub secret scanning would flag it)
+    fake_bot_token = "123456789" + ":" + "AAH4" + "fake" * 7 + "12"
+    text = masker.mask(f"token=super-secret-value auth: Bearer abc.def-123 tg={fake_bot_token}")
     assert "super-secret-value" not in text
     assert "abc.def-123" not in text
     assert "AAH4fake" not in text
     record = logging.LogRecord(
-        "x", logging.INFO, "f", 1, "key %s", ("sk-ant-api03-abcdefghijklmnop",), None
+        "x", logging.INFO, "f", 1, "key %s", ("sk-" + "ant-api03-abcdefghijklmnop",), None
     )
     MaskingFilter().filter(record)
     assert "abcdefghijklmnop" not in record.getMessage()
