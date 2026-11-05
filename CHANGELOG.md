@@ -6,6 +6,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 ## [Non publié]
 
 ### Ajouté
+- **Mémoire longue** : « souviens-toi que… », notes annoncées, `/memoire`, `/oublie`, injectées
+  comme données ; une routine ne peut pas en écrire.
 - **Télécommande `/maison`** dans Telegram : pièces → appareils avec leur état, un appui bascule,
   sans LLM, permissions et confirmations appliquées.
 - **Domotique proactive** : alertes sur changements d'état Home Assistant (conditions, durée,

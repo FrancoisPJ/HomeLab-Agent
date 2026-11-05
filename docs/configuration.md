@@ -92,6 +92,9 @@ en HTTP, le token transite en clair sur le réseau local.
 `enabled`, `bind` (127.0.0.1), `port`, `password_env`. Dans Docker, le conteneur écoute sur
 `0.0.0.0` (variable `HLA_WEB_BIND`) mais le port n'est publié que sur `127.0.0.1` de l'hôte.
 
+### `memory`
+Mémoire longue : `enabled`, `max_items`, `context_max_chars`. Voir [telegram.md](telegram.md#mémoire-longue).
+
 ### `voice`
 Messages vocaux Telegram : `enabled`, `stt_url`, `language`, `max_duration_s`, `echo_transcript`,
 `timeout_s`, `stt_model`, `api_key_env`. Voir [voice.md](voice.md).

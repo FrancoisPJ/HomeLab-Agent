@@ -27,6 +27,7 @@ class ToolContext:
     model: str = ""
     confirm: ConfirmFn = _never_confirm
     escalation: dict[str, str] | None = None  # set by the `escalate` tool
+    notify: Callable[[str], Awaitable[None]] | None = None  # tell the user something now
 
 
 @dataclass(slots=True)

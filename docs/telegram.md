@@ -27,7 +27,20 @@ des boutons par un autre utilisateur sont aussi ignorés.
 | `/jobs` | dernières tâches de la conversation |
 | `/reset` | efface l'historique de la conversation |
 | `/maison` | télécommande à boutons (pièces → appareils), sans LLM |
+| `/memoire`, `/oublie <n°>\|tout` | notes que l'agent garde sur toi |
 | `/alerts`, `/routines`, `/run <nom>`, `/routine on\|off\|delete <nom>` | domotique proactive, voir [proactive.md](proactive.md) |
+
+## Mémoire longue
+
+« Souviens-toi que je me lève à 7h en semaine », « retiens que le chat s'appelle Pixel » : l'agent
+garde ces notes durablement (par conversation) et s'en sert pour te répondre.
+
+- Chaque note ajoutée est **annoncée** (« 🧠 Noté : « … » ») : rien n'est mémorisé en silence.
+- `/memoire` liste les notes, `/oublie 3` en efface une, `/oublie tout` les efface toutes ; tu peux
+  aussi demander « oublie que… ».
+- Les notes entrent dans le prompt comme des **données** ; une routine ne peut pas en écrire (pas
+  d'injection d'instructions qui s'installerait durablement).
+- Réglages : section `memory` (`enabled`, `max_items`, `context_max_chars`).
 
 ## Télécommande `/maison`
 

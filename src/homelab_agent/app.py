@@ -19,6 +19,7 @@ from homelab_agent.config.loader import ConfigError, ConfigStore
 from homelab_agent.config.models import AppConfig, Tier
 from homelab_agent.core.budget import BudgetManager
 from homelab_agent.core.jobs import JobQueue
+from homelab_agent.core.memory import MemoryService, register_memory_tools
 from homelab_agent.core.orchestrator import Orchestrator
 from homelab_agent.core.proactive import AlertEngine, RoutineScheduler
 from homelab_agent.core.router import TIER_LABELS, HealthTracker, Router
@@ -157,6 +158,16 @@ class Services:
             return f"✅ {routine.name} : rien à signaler."
         return f"▶️ {routine.name} lancée." if routine.prompt else "✔️"
 
+    async def memory_list(self, chat_id: str, arg: str) -> str:
+        if self.orchestrator.memory is None:
+            return "La mémoire est indisponible."
+        return await self.orchestrator.memory.list_text(chat_id)
+
+    async def memory_forget(self, chat_id: str, arg: str) -> str:
+        if self.orchestrator.memory is None:
+            return "La mémoire est indisponible."
+        return await self.orchestrator.memory.forget_command(chat_id, arg)
+
     async def routine_cmd(self, chat_id: str, arg: str) -> str:
         if self.routine_manager is None:
             return "Les routines sont indisponibles."
@@ -206,6 +217,8 @@ async def build_services(store: ConfigStore, *, start_background: bool = True) -
         register_ha_tools(registry, ha)
     orch = Orchestrator(lambda: store.config, db, router, registry, budget, ha)
     services = Services(store, db, backends, health, budget, router, registry, orch, ha)
+    orch.memory = MemoryService(lambda: store.config, db)
+    register_memory_tools(registry, orch.memory)
     services.routines = RoutineScheduler(
         lambda: store.config, orch.handle, lambda: services.notifier, ha, db
     )
@@ -348,6 +361,8 @@ async def run(config_path: str) -> None:
                 "routines": ("routines planifiées", services.routines_text),
                 "run": ("lancer une routine maintenant", services.run_routine),
                 "routine": ("activer / désactiver / supprimer une routine", services.routine_cmd),
+                "memoire": ("ce que je retiens de toi", services.memory_list),
+                "oublie": ("oublier une note (/oublie <n°> ou tout)", services.memory_forget),
                 "alerts": ("alertes et derniers déclenchements", services.alerts_text),
             },
             voice=lambda: store.config.voice,

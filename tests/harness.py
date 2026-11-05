@@ -14,6 +14,7 @@ from homelab_agent.config.loader import ConfigStore
 from homelab_agent.config.models import AppConfig, OpenAICompatBackend
 from homelab_agent.core.budget import BudgetManager
 from homelab_agent.core.jobs import JobQueue
+from homelab_agent.core.memory import MemoryService, register_memory_tools
 from homelab_agent.core.orchestrator import Orchestrator
 from homelab_agent.core.proactive import RoutineScheduler
 from homelab_agent.core.router import HealthTracker, Router
@@ -150,6 +151,8 @@ async def build_harness(tmp_path: Path, **overrides: Any) -> Harness:
     )
     register_ha_tools(registry, ha)
     orch = Orchestrator(lambda: store.config, db, router, registry, budget, ha)
+    orch.memory = MemoryService(lambda: store.config, db)
+    register_memory_tools(registry, orch.memory)
     scheduler = RoutineScheduler(lambda: store.config, orch.handle, lambda: notifier, ha, db)
     manager = RoutineManager(store, scheduler)
 

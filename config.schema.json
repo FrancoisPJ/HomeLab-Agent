@@ -649,6 +649,34 @@
       "title": "Limits",
       "type": "object"
     },
+    "MemorySection": {
+      "additionalProperties": false,
+      "description": "Durable notes about the user, remembered on request and injected as data.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "max_items": {
+          "default": 100,
+          "description": "Notes kept per conversation.",
+          "maximum": 1000,
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "context_max_chars": {
+          "default": 1500,
+          "description": "Size limit in the prompt.",
+          "minimum": 100,
+          "title": "Context Max Chars",
+          "type": "integer"
+        }
+      },
+      "title": "MemorySection",
+      "type": "object"
+    },
     "ModelItem": {
       "additionalProperties": false,
       "description": "A GGUF model served by llama.cpp. Rendered into llama-swap configs.",
@@ -1585,6 +1613,9 @@
     },
     "voice": {
       "$ref": "#/$defs/VoiceSection"
+    },
+    "memory": {
+      "$ref": "#/$defs/MemorySection"
     },
     "models": {
       "$ref": "#/$defs/ModelsSection"

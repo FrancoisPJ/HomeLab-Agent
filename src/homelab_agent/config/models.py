@@ -338,6 +338,15 @@ class StoreSection(_Base):
     )
 
 
+# -------------------------------------------------------------------------- memory
+class MemorySection(_Base):
+    """Durable notes about the user, remembered on request and injected as data."""
+
+    enabled: bool = True
+    max_items: int = Field(100, ge=1, le=1000, description="Notes kept per conversation.")
+    context_max_chars: int = Field(1500, ge=100, description="Size limit in the prompt.")
+
+
 # --------------------------------------------------------------------------- voice
 class VoiceSection(_Base):
     """Telegram voice notes, transcribed locally (whisper.cpp) then handled as text."""
@@ -517,6 +526,7 @@ class AppConfig(_Base):
     web: WebSection = Field(default_factory=WebSection)
     proactive: ProactiveSection = Field(default_factory=ProactiveSection)
     voice: VoiceSection = Field(default_factory=VoiceSection)
+    memory: MemorySection = Field(default_factory=MemorySection)
     models: ModelsSection = Field(default_factory=ModelsSection)
     store: StoreSection = Field(default_factory=StoreSection)
 

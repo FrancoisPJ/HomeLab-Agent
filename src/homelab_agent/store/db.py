@@ -93,6 +93,14 @@ class BudgetAlert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class Memory(Base):
+    __tablename__ = "memories"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chat_id: Mapped[str] = mapped_column(String(64), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class AlertState(Base):
     """Last notification time of an (alert, entity) pair: cooldowns survive restarts."""
 
@@ -153,6 +161,31 @@ class Database:
 
     async def close(self) -> None:
         await self.engine.dispose()
+
+    # ------------------------------------------------------------ memory
+    async def add_memory(self, chat_id: str, text: str) -> int:
+        async with self.session() as s, s.begin():
+            row = Memory(chat_id=chat_id, text=text)
+            s.add(row)
+            await s.flush()
+            return row.id
+
+    async def list_memories(self, chat_id: str) -> list[Memory]:
+        async with self.session() as s:
+            q = select(Memory).where(Memory.chat_id == chat_id).order_by(Memory.id)
+            return list((await s.execute(q)).scalars())
+
+    async def delete_memory(self, chat_id: str, memory_id: int) -> bool:
+        async with self.session() as s, s.begin():
+            res = await s.execute(
+                delete(Memory).where(Memory.chat_id == chat_id, Memory.id == memory_id)
+            )
+            return bool(getattr(res, "rowcount", 0))
+
+    async def clear_memories(self, chat_id: str) -> int:
+        async with self.session() as s, s.begin():
+            res = await s.execute(delete(Memory).where(Memory.chat_id == chat_id))
+            return int(getattr(res, "rowcount", 0) or 0)
 
     # ------------------------------------------------------------ retention
     async def purge(self, older_than_days: int, now: datetime | None = None) -> dict[str, int]:

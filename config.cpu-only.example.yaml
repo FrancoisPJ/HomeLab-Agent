@@ -173,6 +173,15 @@ proactive:
   #    tier: gpu
 
 # -----------------------------------------------------------------------------
+#  Mémoire longue : « souviens-toi que je me lève à 7h ». Chaque note est
+#  annoncée (🧠 Noté), visible avec /memoire, effaçable avec /oublie.
+# -----------------------------------------------------------------------------
+memory:
+  enabled: true
+  max_items: 100                # notes gardées par conversation
+  context_max_chars: 1500       # place maximale dans le prompt
+
+# -----------------------------------------------------------------------------
 #  Messages vocaux Telegram, transcrits en local (whisper.cpp). Voir docs/voice.md.
 #  Activer : enabled: true, puis  make engines models  et  make up PROFILE=full,voice
 # -----------------------------------------------------------------------------

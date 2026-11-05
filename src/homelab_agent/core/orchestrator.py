@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -35,6 +35,7 @@ from homelab_agent.tools.registry import ESCALATE_TOOL_NAME, ToolContext, ToolRe
 
 if TYPE_CHECKING:
     from homelab_agent.core.jobs import JobQueue
+    from homelab_agent.core.memory import MemoryService
     from homelab_agent.tools.homeassistant.tools import HomeAssistantService
 
 log = logging.getLogger(__name__)
@@ -80,6 +81,7 @@ class Orchestrator:
         self.budget = budget
         self.ha = ha
         self.jobs: JobQueue | None = None
+        self.memory: MemoryService | None = None
 
     @property
     def cfg(self) -> AppConfig:
@@ -150,7 +152,9 @@ class Orchestrator:
             await replier.send("ℹ️ " + " ".join(notes))
         start = time.monotonic()
         try:
-            outcome = await self.run_agent(backend, tier, msg, replier.stream(), replier.confirm)
+            outcome = await self.run_agent(
+                backend, tier, msg, replier.stream(), replier.confirm, replier.send
+            )
         except ContextOverflow as exc:
             # the backend is healthy, the prompt is just too big for it: try a bigger one
             log.warning("context overflow: %s", exc)
@@ -252,6 +256,7 @@ class Orchestrator:
         cfg = self.cfg
         ha_on = self.ha is not None and cfg.home_assistant.enabled
         summary = self.ha.context_summary() if self.ha is not None and ha_on else ""
+        memories = await self.memory.context_text(chat_id) if self.memory is not None else ""
         history_rows = await self.db.history(chat_id, cfg.agent.history_messages + 1)
         # the current user message is already stored as the last item
         if history_rows and history_rows[-1].role == "user" and history_rows[-1].content == text:
@@ -265,7 +270,7 @@ class Orchestrator:
         user = Message("user", text)
 
         def assemble(summary_text: str, hist: list[Message]) -> list[Message]:
-            system = Message("system", build_system_prompt(cfg, tier, summary_text))
+            system = Message("system", build_system_prompt(cfg, tier, summary_text, memories))
             return [system, *hist, user]
 
         if backend is None or backend.max_context is None:
@@ -300,6 +305,7 @@ class Orchestrator:
         msg: IncomingMessage,
         stream: StreamHandle | None = None,
         confirm: Callable[[str], object] | None = None,
+        notify: Callable[[str], Awaitable[None]] | None = None,
     ) -> AgentOutcome:
         stream = stream or _NullStream()
         cfg = self.cfg
@@ -310,6 +316,10 @@ class Orchestrator:
             exclude.add("ha")
         if msg.origin != "user" or not cfg.proactive.chat_edit:
             exclude.add("routine_edit")
+        if self.memory is None or not cfg.memory.enabled:
+            exclude.add("memory")
+        elif msg.origin != "user":
+            exclude.add("memory_edit")
         tools = self.registry.specs(exclude_tags=exclude)
         messages = await self.build_messages(msg.chat_id, tier, msg.text, backend, tools)
         ctx = ToolContext(
@@ -317,6 +327,7 @@ class Orchestrator:
         )
         if confirm is not None:
             ctx.confirm = confirm  # type: ignore[assignment]
+        ctx.notify = notify
         outcome = AgentOutcome()
         max_failures = cfg.routing.escalation.max_tool_failures
         for _ in range(cfg.agent.max_tool_rounds):
@@ -371,7 +382,9 @@ class Orchestrator:
         msg = IncomingMessage(user_id=user_id, chat_id=chat_id, text=prompt)
         start = time.monotonic()
         try:
-            outcome = await self.run_agent(backend, Tier.CPU, msg, None, replier.confirm)
+            outcome = await self.run_agent(
+                backend, Tier.CPU, msg, None, replier.confirm, replier.send
+            )
         except BackendUnavailable:
             self.router.health.mark_down(backend.name)
             raise

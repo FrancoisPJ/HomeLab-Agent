@@ -23,7 +23,9 @@ ESCALATE_HINT = """- Si la demande est trop complexe pour toi (raisonnement long
   analyse), appelle l'outil escalate (cpu = non urgent, cloud = urgent ou très complexe)."""
 
 
-def build_system_prompt(cfg: AppConfig, tier: Tier, ha_summary: str = "") -> str:
+def build_system_prompt(
+    cfg: AppConfig, tier: Tier, ha_summary: str = "", memories: str = ""
+) -> str:
     now = datetime.now(ZoneInfo(cfg.agent.timezone)).strftime("%A %d %B %Y %H:%M")
     language = {"fr": "français", "en": "English"}.get(cfg.agent.language, cfg.agent.language)
     parts = [BASE_PROMPT.format(language=language, now=now)]
@@ -31,6 +33,8 @@ def build_system_prompt(cfg: AppConfig, tier: Tier, ha_summary: str = "") -> str
         parts.append(ESCALATE_HINT)
     if cfg.agent.system_prompt:
         parts.append(cfg.agent.system_prompt.strip())
+    if memories:
+        parts.append(memories)
     if ha_summary:
         parts.append("Entités Home Assistant disponibles :\n" + ha_summary)
     return "\n".join(parts)
