@@ -20,7 +20,8 @@ from ruamel.yaml.error import YAMLError
 
 from homelab_agent.config.models import AppConfig
 
-_ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+# ``$${...}`` is an escaped literal ``${...}`` (not expanded)
+_ENV_RE = re.compile(r"(\$?)\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 
 class ConfigError(Exception):
@@ -35,13 +36,20 @@ def _yaml() -> YAML:
     return y
 
 
+def contains_env_reference(text: str) -> bool:
+    """True when ``text`` could be expanded from the environment once saved in the config."""
+    return "${" in text
+
+
 def expand_env(value: Any, env: dict[str, str] | None = None) -> Any:
-    """Recursively replace ``${VAR}`` / ``${VAR:-default}`` in strings."""
+    """Recursively replace ``${VAR}`` / ``${VAR:-default}`` in strings (``$${`` = literal)."""
     env = dict(os.environ) if env is None else env
     if isinstance(value, str):
 
         def repl(m: re.Match[str]) -> str:
-            name, default = m.group(1), m.group(2)
+            if m.group(1):  # escaped: $${VAR} -> literal ${VAR}
+                return m.group(0)[1:]
+            name, default = m.group(2), m.group(3)
             if name in env and env[name] != "":
                 return env[name]
             if default is not None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from fnmatch import fnmatchcase
 from typing import Any
 
 from homelab_agent.config.models import HomeAssistantSection
@@ -156,9 +157,22 @@ class HomeAssistantService:
         for key in ("entity_id", "area_id", "device_id"):
             if key in data:  # targets must go through the explicit, checked parameters
                 return ToolResult(False, error=f"put '{key}' in the target parameters, not in data")
+        section = self.section
+        full = f"{domain}.{service}"
+        if any(fnmatchcase(full, g) for g in section.blocked_services) and not any(
+            fnmatchcase(full, g) for g in section.allowed_services
+        ):
+            return ToolResult(
+                False, error=f"permission denied: {full} is a blocked service", outcome="denied"
+            )
         targets = self._resolve_targets(entity_ids, area_ids)
         if area_ids and not targets:
             return ToolResult(False, error=f"no entity found in area(s) {area_ids}")
+        if not targets and domain not in section.untargeted_domains:
+            return ToolResult(
+                False,
+                error=f"{full} needs explicit entity_id targets (untargeted calls are refused)",
+            )
         if targets:
             decisions = {
                 e: self.permissions.evaluate(e, "control", areas=self._areas_of(e)) for e in targets

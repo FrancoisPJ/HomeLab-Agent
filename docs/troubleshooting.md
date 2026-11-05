@@ -24,6 +24,14 @@ benchmark depuis l'hôte, publiez temporairement sur `127.0.0.1:8080` uniquement
 - Profil `cpu-only` : partez du préréglage (`make init PRESET=cpu-only`), qui sert le niveau rapide
   depuis `llama-cpu`. Avec la config par défaut, le niveau rapide est 🔴 et tout devient une tâche CPU.
 
+### Vulnérabilité connue de llama-swap
+
+Les versions v260 à v269 de llama-swap embarquent `golang.org/x/net` 0.59, concernée par une
+faille HTTP/2 corrigée en 0.60 (signalée par trivy). Risque accepté pour l'instant : Go ne sert
+le HTTP/2 que sur TLS, et llama-swap n'écoute que sur le réseau Compose interne, sans port publié.
+À mettre à jour (`LLAMA_SWAP_VERSION` et `LLAMA_SWAP_SHA256` dans les Dockerfile) dès qu'une version
+corrigée sort.
+
 ## « Message trop long pour gpu_fast »
 
 Le message ne tient pas dans le contexte du modèle rapide (`max_context`) : il est envoyé au niveau

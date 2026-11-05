@@ -186,7 +186,8 @@ class AlertEngine:
         cfg = self._cfg()
         now = self.clock()
         key = (rule.name, info.entity_id)
-        last = self._last_sent.get(key)
+        db_key = f"{rule.name}|{info.entity_id}"
+        last = self._last_sent.get(key) or await self.db.alert_last_sent(db_key)
         if last is not None and now - last < timedelta(seconds=rule.cooldown_s):
             outcome = "cooldown"
         elif rule.severity != "critical" and in_quiet_hours(
@@ -196,6 +197,7 @@ class AlertEngine:
         else:
             outcome = "sent"
             self._last_sent[key] = now
+            await self.db.set_alert_sent(db_key, now)
             text = render_message(rule, info)
             if rule.severity == "critical":
                 text = "🚨 " + text
@@ -304,7 +306,44 @@ class RoutineScheduler:
                 out.append(r)
         return out
 
-    async def run(self, routine: Routine, chats: list[str] | None = None) -> list[str]:
+    def scheduled_once(self, routine: Routine) -> datetime | None:
+        """UTC time of a one-off routine (None for repeating ones)."""
+        if routine.date is None:
+            return None
+        tz = ZoneInfo(self._cfg().agent.timezone)
+        local = datetime.combine(
+            datetime.strptime(routine.date, "%Y-%m-%d").date(), _hhmm(routine.at), tzinfo=tz
+        )
+        return local.astimezone(UTC)
+
+    async def catch_up(self) -> list[str]:
+        """At startup: deal with one-off routines whose time passed while the agent was down."""
+        cfg = self._cfg()
+        now = self.clock()
+        handled: list[str] = []
+        for routine in list(cfg.proactive.routines):
+            when = self.scheduled_once(routine)
+            if when is None or when > now or not routine.enabled:
+                continue
+            late = now - when
+            if late <= timedelta(seconds=cfg.proactive.missed_grace_s):
+                await self.run(routine, late=True)
+            else:
+                chats = [str(c) for c in routine.chat_ids] or recipients(cfg)
+                what = routine.message or routine.prompt or routine.name
+                local = when.astimezone(ZoneInfo(cfg.agent.timezone))
+                for chat in chats:
+                    await self._notifier().notify(
+                        chat, f"⚠️ Routine manquée ({local:%d/%m %H:%M}, agent arrêté) : {what}"
+                    )
+                if self.on_once_done is not None:
+                    await self.on_once_done(routine.name)
+            handled.append(routine.name)
+        return handled
+
+    async def run(
+        self, routine: Routine, chats: list[str] | None = None, *, late: bool = False
+    ) -> list[str]:
         """Run one routine now and return the messages sent (check routines)."""
         cfg = self._cfg()
         chats = chats or [str(c) for c in routine.chat_ids] or recipients(cfg)
@@ -323,6 +362,8 @@ class RoutineScheduler:
                 if routine.message is not None
                 else self.check_report(routine)
             )
+            if text is not None and late:
+                text += " (en retard : l'agent était arrêté)"
             if text is not None:
                 for chat in chats:
                     await self._notifier().notify(chat, text)
@@ -355,6 +396,11 @@ class RoutineScheduler:
 
     def start(self, tick_s: float = 30.0) -> None:
         async def loop() -> None:
+            try:
+                if self.section.enabled:
+                    await self.catch_up()
+            except Exception:
+                log.exception("routine catch-up failed")
             previous = self.clock()
             while True:
                 await asyncio.sleep(tick_s)

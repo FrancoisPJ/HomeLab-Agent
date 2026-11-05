@@ -5,6 +5,9 @@ ARG LLAMA_CPP_REF=b12000
 ARG LLAMA_CPP_COMMIT=68d20b884c3878217de79eade0a249efde96ab38
 ARG LLAMA_SWAP_VERSION=260
 # From llama-swap_${LLAMA_SWAP_VERSION}_checksums.txt of the GitHub release.
+# Known: v260..v269 embed golang.org/x/net 0.59 (HTTP/2 CVE, fixed in 0.60). Accepted risk:
+# Go only serves HTTP/2 over TLS and llama-swap is reachable on the compose network only.
+# See docs/troubleshooting.md. Bump when a release ships x/net >= 0.60.
 ARG LLAMA_SWAP_SHA256=d856a908507560cbdc253300bcf49092c7ead3c85098687428b0c9d4832ff46d
 
 FROM ubuntu:24.04 AS build
@@ -42,6 +45,7 @@ RUN echo "${LLAMA_SWAP_SHA256}  /tmp/ls.tgz" | sha256sum -c - \
 
 FROM ubuntu:24.04
 RUN apt-get update \
+ && apt-get -y upgrade \
  && apt-get install -y --no-install-recommends curl libgomp1 ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 10002 llama \

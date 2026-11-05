@@ -28,6 +28,7 @@ RUN cmake -B build \
 
 FROM ubuntu:24.04
 RUN apt-get update \
+ && apt-get -y upgrade \
  && apt-get install -y --no-install-recommends ffmpeg curl libgomp1 ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 10004 whisper \

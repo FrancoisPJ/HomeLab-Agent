@@ -93,6 +93,14 @@ class BudgetAlert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class AlertState(Base):
+    """Last notification time of an (alert, entity) pair: cooldowns survive restarts."""
+
+    __tablename__ = "alert_state"
+    key: Mapped[str] = mapped_column(String(256), primary_key=True)
+    last_sent: Mapped[datetime] = mapped_column(DateTime)
+
+
 class AuditEntry(Base):
     __tablename__ = "audit"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -295,6 +303,20 @@ class Database:
                 .group_by(Spend.provider)
             )
             return {p: float(c or 0) for p, c in (await s.execute(q)).all()}
+
+    async def alert_last_sent(self, key: str) -> datetime | None:
+        async with self.session() as s:
+            row = await s.get(AlertState, key)
+            return row.last_sent.replace(tzinfo=UTC) if row else None
+
+    async def set_alert_sent(self, key: str, at: datetime) -> None:
+        naive = at.astimezone(UTC).replace(tzinfo=None)
+        async with self.session() as s, s.begin():
+            row = await s.get(AlertState, key)
+            if row is None:
+                s.add(AlertState(key=key, last_sent=naive))
+            else:
+                row.last_sent = naive
 
     async def alert_once(self, key: str) -> bool:
         """Return True the first time ``key`` is seen (used to send each alert once)."""

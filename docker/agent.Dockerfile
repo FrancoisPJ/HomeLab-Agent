@@ -20,7 +20,11 @@ FROM ${PYTHON_IMAGE}
 LABEL org.opencontainers.image.title="homelab-agent" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.source="https://github.com/FrancoisPJ/HomeLab-Agent"
-RUN groupadd --system --gid 10001 agent \
+# security updates of the base image (it is rebuilt by CI, so they stay current)
+RUN apt-get update \
+ && apt-get -y upgrade \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 agent \
  && useradd --system --uid 10001 --gid agent --home-dir /app --shell /usr/sbin/nologin agent \
  && mkdir -p /data /config \
  && chown agent:agent /data

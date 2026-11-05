@@ -226,6 +226,24 @@ class HomeAssistantSection(_Base):
     confirm: list[Selector] = Field(
         default_factory=list, description="Entities whose control requires a Yes/No in Telegram."
     )
+    blocked_services: list[str] = Field(
+        default_factory=lambda: [
+            "hassio.*", "homeassistant.restart", "homeassistant.stop",
+            "homeassistant.reload_all", "homeassistant.set_location", "recorder.*",
+            "shell_command.*", "python_script.*", "pyscript.*", "backup.*", "update.install",
+            "system_log.*", "logger.*", "persistent_notification.dismiss_all",
+        ],
+        description="Services the agent may never call (globs on domain.service), whatever "
+        "the permissions. Unblock one with allowed_services.",
+    )  # fmt: skip
+    allowed_services: list[str] = Field(
+        default_factory=list, description="Exceptions to blocked_services, e.g. backup.create."
+    )
+    untargeted_domains: list[str] = Field(
+        default_factory=lambda: ["notify", "tts", "persistent_notification"],
+        description="Domains whose services may be called without a target entity. Every "
+        "other service needs explicit entities (so that per-entity rules always apply).",
+    )
     context_max_chars: int = Field(3000, ge=200, description="Size limit of the entity summary.")
     context_domains: list[str] = Field(
         default_factory=lambda: [
@@ -430,6 +448,12 @@ class ProactiveSection(_Base):
         "(always behind a Yes/No confirmation).",
     )
     max_routines: int = Field(50, ge=1, description="Upper bound on the number of routines.")
+    missed_grace_s: int = Field(
+        7200,
+        ge=0,
+        description="A one-off routine missed while the agent was down still runs, marked "
+        "late, if less than this old; older ones are removed with a notice.",
+    )
 
     @model_validator(mode="after")
     def _unique(self) -> ProactiveSection:

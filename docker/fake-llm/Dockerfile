@@ -7,6 +7,7 @@ ARG UV_IMAGE=astral/uv:0.11.32
 FROM ${UV_IMAGE} AS uv
 FROM ${PYTHON_IMAGE}
 COPY --from=uv /uv /bin/uv
+RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/*
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE ./

@@ -8,6 +8,7 @@ routine's own prompt can never edit routines (no self-replicating schedules).
 
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from collections.abc import Callable
@@ -17,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
-from homelab_agent.config.loader import ConfigError, ConfigStore
+from homelab_agent.config.loader import ConfigError, ConfigStore, contains_env_reference
 from homelab_agent.config.models import WEEKDAYS, Routine, Weekday
 from homelab_agent.core.proactive import RoutineScheduler
 from homelab_agent.tools.registry import Tool, ToolContext, ToolRegistry, ToolResult
@@ -161,6 +162,11 @@ class RoutineManager:
             raise RoutineError(str(exc)) from exc
 
     def build(self, args: dict[str, Any], *, chat_id: str | None, requester: str) -> Routine:
+        for key, value in args.items():
+            # text saved in config.yaml would be expanded from the environment on reload:
+            # never let a conversation write ${VAR} (it could exfiltrate a secret)
+            if contains_env_reference(json.dumps(value, ensure_ascii=False)):
+                raise ValueError(f"'{key}' ne peut pas contenir '${{' (variables d'environnement)")
         what = _ascii(str(args.get("what") or "")).strip()
         text = str(args.get("text") or "").strip()
         fields: dict[str, Any] = {"at": parse_time(args.get("at", ""))}

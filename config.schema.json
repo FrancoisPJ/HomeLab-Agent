@@ -548,6 +548,30 @@
           "title": "Confirm",
           "type": "array"
         },
+        "blocked_services": {
+          "description": "Services the agent may never call (globs on domain.service), whatever the permissions. Unblock one with allowed_services.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocked Services",
+          "type": "array"
+        },
+        "allowed_services": {
+          "description": "Exceptions to blocked_services, e.g. backup.create.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Services",
+          "type": "array"
+        },
+        "untargeted_domains": {
+          "description": "Domains whose services may be called without a target entity. Every other service needs explicit entities (so that per-entity rules always apply).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Untargeted Domains",
+          "type": "array"
+        },
         "context_max_chars": {
           "default": 3000,
           "description": "Size limit of the entity summary.",
@@ -1004,6 +1028,13 @@
           "description": "Upper bound on the number of routines.",
           "minimum": 1,
           "title": "Max Routines",
+          "type": "integer"
+        },
+        "missed_grace_s": {
+          "default": 7200,
+          "description": "A one-off routine missed while the agent was down still runs, marked late, if less than this old; older ones are removed with a notice.",
+          "minimum": 0,
+          "title": "Missed Grace S",
           "type": "integer"
         }
       },
