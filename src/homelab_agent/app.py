@@ -82,6 +82,39 @@ class Services:
     def cfg(self) -> AppConfig:
         return self.store.config
 
+    # ------------------------------------------------------------- metrics
+    async def metrics_samples(self) -> list[tuple[str, dict[str, str], float]]:
+        """Gauges computed at scrape time."""
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            ver = version("homelab-agent")
+        except PackageNotFoundError:  # pragma: no cover - source checkout without install
+            ver = "dev"
+        samples: list[tuple[str, dict[str, str], float]] = [("build_info", {"version": ver}, 1)]
+        for tier in Tier:
+            for name in self.cfg.backends_for(tier):
+                up = self.health.is_up(name) and self.health.last_probe.get(name, True)
+                samples.append(("backend_up", {"backend": name, "tier": tier.value}, float(up)))
+        if self.ha is not None:
+            samples.append(("home_assistant_connected", {}, float(self.ha.client.connected)))
+            samples.append(
+                ("home_assistant_entities", {}, float(len(self.ha.client.cache.entities)))
+            )
+        counts = await self.db.count_jobs()
+        for status in ("queued", "running", "done", "failed"):
+            samples.append(("jobs", {"status": status}, float(counts.get(status, 0))))
+        day, month = await self.budget.totals()
+        lim = self.cfg.cloud.limits
+        samples += [
+            ("cloud_spend_eur", {"period": "day"}, day),
+            ("cloud_spend_eur", {"period": "month"}, month),
+            ("cloud_limit_eur", {"period": "day"}, lim.daily_eur),
+            ("cloud_limit_eur", {"period": "month"}, lim.monthly_eur),
+            ("cloud_enabled", {}, float(self.cfg.cloud.enabled)),
+        ]
+        return samples
+
     # ---------------------------------------------------------- text views
     async def status_text(self) -> str:
         lines = ["État des moteurs :"]

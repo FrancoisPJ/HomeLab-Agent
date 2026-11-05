@@ -63,8 +63,13 @@ def create_app(services: Services) -> FastAPI:
     def authed(request: Request) -> bool:
         pw = password()
         auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("bearer ") and check_password(pw, auth[7:].strip()):
+        bearer = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        if bearer and check_password(pw, bearer):
             return True
+        if bearer and request.url.path == "/metrics" and request.method == "GET":
+            token = AppConfig.secret(services.cfg.web.metrics_token_env)
+            if token and len(token) >= 16 and check_password(token, bearer):
+                return True  # Prometheus: this token grants /metrics only
         return check_session(pw, request.cookies.get(COOKIE))
 
     @app.middleware("http")
@@ -165,7 +170,10 @@ def create_app(services: Services) -> FastAPI:
 
     @app.get("/metrics")
     async def metrics() -> PlainTextResponse:
-        return PlainTextResponse(METRICS.render())
+        return PlainTextResponse(
+            await METRICS.render([services.metrics_samples]),
+            media_type="text/plain; version=0.0.4",
+        )
 
     # ----------------------------------------------------------- permissions
     def entity_rows() -> list[dict[str, Any]]:

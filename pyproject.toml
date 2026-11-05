@@ -34,6 +34,7 @@ dev = [
     "pytest-cov>=6.0",
     "hypothesis>=6.115",
     "pre-commit>=4.0",
+    "prometheus-client>=0.21",
 ]
 
 [build-system]

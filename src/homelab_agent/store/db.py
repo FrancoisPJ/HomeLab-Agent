@@ -310,6 +310,11 @@ class Database:
             )
             return int(getattr(res, "rowcount", 0) or 0)
 
+    async def count_jobs(self) -> dict[str, int]:
+        async with self.session() as s:
+            q = select(Job.status, func.count()).group_by(Job.status)
+            return {status: int(n) for status, n in (await s.execute(q)).all()}
+
     async def get_job(self, job_id: int) -> Job | None:
         async with self.session() as s:
             return await s.get(Job, job_id)

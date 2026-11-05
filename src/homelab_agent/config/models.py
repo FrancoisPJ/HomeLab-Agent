@@ -276,6 +276,10 @@ class WebSection(_Base):
     bind: str = "127.0.0.1"
     port: int = Field(8099, ge=1, le=65535)
     password_env: str = "PANEL_PASSWORD"
+    metrics_token_env: str | None = Field(
+        "METRICS_TOKEN",
+        description="Token that only grants GET /metrics (for Prometheus); unset = password only.",
+    )
 
 
 # -------------------------------------------------------------------------- models

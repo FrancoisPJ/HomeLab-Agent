@@ -1618,6 +1618,19 @@
           "default": "PANEL_PASSWORD",
           "title": "Password Env",
           "type": "string"
+        },
+        "metrics_token_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "METRICS_TOKEN",
+          "description": "Token that only grants GET /metrics (for Prometheus); unset = password only.",
+          "title": "Metrics Token Env"
         }
       },
       "title": "WebSection",
