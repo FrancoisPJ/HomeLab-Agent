@@ -19,7 +19,8 @@ Il pilote **Home Assistant** (lecture et contrôle), avec des **permissions appl
 et réglables dans un **panneau web**. Il peut aussi **prévenir** (fuite, porte ouverte, température)
 avec un bouton d'action, et lancer des **routines** à heure fixe, que tu crées en lui parlant
 (« rappelle-moi de sortir les poubelles tous les mardis à 20h ») ([docs/proactive.md](docs/proactive.md)).
-Les **messages vocaux** Telegram sont transcrits en local avec whisper.cpp ([docs/voice.md](docs/voice.md)).
+Les **messages vocaux** Telegram sont transcrits en local avec whisper.cpp, et l'agent peut
+**répondre de vive voix** avec Piper ([docs/voice.md](docs/voice.md)).
 
 > ⚠️ Le projet a été développé et testé **sans accès au matériel réel** : la CI utilise des faux
 > services (LLM, Home Assistant, Telegram). Avant d'en dépendre, déroulez la
@@ -77,7 +78,7 @@ distant : `ssh -L 8099:127.0.0.1:8099 serveur`.
 | `full` | agent, llama-gpu, llama-cpu | serveur avec GPU NVIDIA |
 | `cpu-only` | agent, llama-cpu | pas de GPU : avec `make init PRESET=cpu-only`, un petit modèle CPU sert le niveau rapide |
 | `no-gpu` | agent | moteurs hébergés ailleurs (changez les `url`) ou cloud seul |
-| `voice` | whisper (transcription) | à ajouter : `make up PROFILE=full,voice` |
+| `voice` | whisper (transcription) et tts (Piper) | à ajouter : `make up PROFILE=full,voice` |
 | `dev` | agent + faux LLM, faux Home Assistant, fausse API Telegram, faux STT | développement, démo, tests e2e |
 
 `make up PROFILE=cpu-only`, `make dev` (rechargement à chaud), `make e2e` (scénario complet).

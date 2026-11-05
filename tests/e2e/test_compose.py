@@ -276,3 +276,24 @@ def test_14_undo_button_after_a_fast_command() -> None:
     assert ha_calls()[n:] == [
         {"domain": "light", "service": "turn_on", "data": {"entity_id": ["light.salon"]}}
     ]
+
+
+def test_15_voice_note_gets_a_spoken_answer() -> None:
+    with client() as c:
+        since = len(c.get(f"{TG}/_test/sent").json())
+        c.post(f"{HA}/_test/state", json={"entity_id": "light.salon", "state": "on"})
+        time.sleep(0.5)
+        c.post(
+            f"{TG}/_test/voice", json={"user_id": USER, "text": "éteins le salon"}
+        ).raise_for_status()
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        with client() as c:
+            sent = c.get(f"{TG}/_test/sent").json()[since:]
+        voices = [m for m in sent if m.get("op") == "voice"]
+        if voices:
+            break
+        time.sleep(0.3)
+    assert voices, [m.get("text") for m in sent]
+    # the fake TTS "audio" is the text it was asked to say
+    assert voices[0]["voice_text"] == "C'est fait. J'ai éteint « salon »."

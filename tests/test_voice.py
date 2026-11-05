@@ -165,3 +165,106 @@ async def test_aiogram_voice_end_to_end(run_server: Any) -> None:
         assert sent[0]["text"] == "🎤 « allume la cuisine »"
     finally:
         await gw.stop()
+
+
+# ------------------------------------------------------------------ voice replies (TTS)
+from homelab_agent.fakes.tts import create_app as fake_tts  # noqa: E402
+from homelab_agent.voice.tts import TextToSpeech, TTSError, speakable  # noqa: E402
+
+
+def test_speakable() -> None:
+    assert speakable("✅ C'est fait 💡 !", 100) == "C'est fait !"
+    assert speakable("Voir https://example.org et **gras** `code`", 100) == "Voir et gras code"
+    assert speakable("```\nprint(1)\n```Fini.", 100) == "Fini."
+    long = "Première phrase. " * 10 + "Fin"
+    out = speakable(long, 60)
+    assert out.endswith(".") and len(out) <= 60
+    assert speakable("ok [actions effectuées : ha_call_service x]", 100) == "ok"
+    assert speakable("✅ light.turn_off → salon", 100) == "C'est fait. J'ai éteint « salon »."
+    assert (
+        speakable("✅ scene.turn_on → Soirée", 100)
+        == "C'est fait. J'ai activé la scène « Soirée »."
+    )
+
+
+async def test_tts_client() -> None:
+    cfg = VoiceSection(enabled=True, reply_voice="always", tts_url="http://tts/v1/audio/speech")
+    app = fake_tts()
+    tts = TextToSpeech(cfg, transport=httpx.ASGITransport(app=app))
+    assert await tts.synthesize("Bonjour") == b"Bonjour"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://x") as c:
+        await c.post("/_control", json={"fail": True})
+    with pytest.raises(TTSError):
+        await tts.synthesize("x")
+
+
+def speaking_frontend(
+    bot: FakeBot, mode: str, tts_app: Any = None
+) -> tuple[TelegramFrontend, list[str]]:
+    got: list[str] = []
+    voice = VoiceSection(enabled=True, reply_voice=mode, stt_url="http://stt/v1/audio/transcriptions",
+                         tts_url="http://tts/v1/audio/speech")  # fmt: skip
+
+    async def handler(msg: IncomingMessage, replier: Replier) -> None:
+        got.append(msg.text)
+        stream = replier.stream()
+        await stream.update("La lumière")
+        await stream.finish(f"💡 La lumière du salon est éteinte ({msg.text}).")
+
+    section = TelegramSection(allowed_user_ids=[111])
+    f = TelegramFrontend(
+        bot, lambda: section, handler, status_text=_text, model_text=_text,
+        jobs_text=_chat, reset_chat=_chat, voice=lambda: voice, stt=stt_client(),
+        tts=TextToSpeech(voice, transport=httpx.ASGITransport(app=tts_app or fake_tts())),
+    )  # fmt: skip
+    return f, got
+
+
+async def test_voice_note_gets_a_voice_reply() -> None:
+    bot = FakeBot()
+    bot.files["v1"] = "éteins le salon".encode()
+    f, got = speaking_frontend(bot, "when_voice")
+    await f.on_voice(111, 111, "v1", 2)
+    voices = [args for op, args in bot.ops if op == "voice"]
+    assert voices == [("111", "La lumière du salon est éteinte (éteins le salon).".encode())]
+    # a typed message gets text only in "when_voice" mode
+    await f.on_message(111, 111, "bonjour")
+    assert len([op for op, _ in bot.ops if op == "voice"]) == 1
+
+
+async def test_always_mode_and_never_mode() -> None:
+    bot = FakeBot()
+    f, _ = speaking_frontend(bot, "always")
+    await f.on_message(111, 111, "bonjour")
+    assert [op for op, _ in bot.ops].count("voice") == 1
+    bot2 = FakeBot()
+    bot2.files["v1"] = b"salut"
+    f2, _ = speaking_frontend(bot2, "never")
+    await f2.on_voice(111, 111, "v1", 2)
+    assert "voice" not in [op for op, _ in bot2.ops]
+
+
+async def test_tts_failure_keeps_the_text_answer() -> None:
+    app = fake_tts()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://x") as c:
+        await c.post("/_control", json={"fail": True})
+    bot = FakeBot()
+    bot.files["v1"] = b"salut"
+    f, _ = speaking_frontend(bot, "when_voice", app)
+    await f.on_voice(111, 111, "v1", 2)
+    assert "voice" not in [op for op, _ in bot.ops]
+    assert any("éteinte" in t for t in bot.texts())
+
+
+def test_tts_models_and_env() -> None:
+    from homelab_agent.engines import models_tsv, render_tts_env
+
+    item = {"name": "voix", "engine": "tts", "repo": "rhasspy/piper-voices",
+            "file": "fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx", "sha256": "a" * 64,
+            "config_sha256": "b" * 64}  # fmt: skip
+    on = base_config(voice={"enabled": True, "reply_voice": "when_voice"}, models={"items": [item]})
+    off = base_config(voice={"enabled": True}, models={"items": [item]})
+    assert "TTS_VOICE=fr_FR-siwis-medium" in render_tts_env(on)
+    tsv = models_tsv(on).splitlines()
+    assert tsv[1].endswith("fr_FR-siwis-medium.onnx.json\t" + "b" * 64)
+    assert models_tsv(off) == ""

@@ -36,6 +36,7 @@ from homelab_agent.tools.homeassistant.permissions import PermissionEngine
 from homelab_agent.tools.homeassistant.tools import HomeAssistantService, register_ha_tools
 from homelab_agent.tools.registry import ToolContext, ToolRegistry, escalate_tool
 from homelab_agent.voice.stt import SpeechToText
+from homelab_agent.voice.tts import TextToSpeech
 from homelab_agent.web.chat import RoutingNotifier, WebChatHub
 
 log = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class Services:
     routines: RoutineScheduler | None = None
     routine_manager: RoutineManager | None = None
     stt: SpeechToText | None = None
+    tts: TextToSpeech | None = None
     webchat: WebChatHub = field(default_factory=WebChatHub)
     started: bool = False
 
@@ -332,6 +334,8 @@ def start_maintenance(services: Services) -> list[asyncio.Task[None]]:
 async def close_services(services: Services) -> None:
     if services.stt:
         await services.stt.aclose()
+    if services.tts:
+        await services.tts.aclose()
     if services.routines:
         await services.routines.stop()
     if services.alerts:
@@ -367,6 +371,8 @@ async def run(config_path: str) -> None:
             stt_key = AppConfig.secret(cfg.voice.api_key_env)
             MASKER.add(stt_key)
             services.stt = SpeechToText(cfg.voice, stt_key)
+            if cfg.voice.reply_voice != "never":
+                services.tts = TextToSpeech(cfg.voice, stt_key)
         frontend = TelegramFrontend(
             gateway.api,
             lambda: store.config.telegram,
@@ -386,6 +392,7 @@ async def run(config_path: str) -> None:
             },
             voice=lambda: store.config.voice,
             stt=services.stt,
+            tts=services.tts,
         )
         gateway.attach(frontend)
         if services.ha is not None:

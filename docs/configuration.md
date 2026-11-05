@@ -97,7 +97,8 @@ Mémoire longue : `enabled`, `max_items`, `context_max_chars`. Voir [telegram.md
 
 ### `voice`
 Messages vocaux Telegram : `enabled`, `stt_url`, `language`, `max_duration_s`, `echo_transcript`,
-`timeout_s`, `stt_model`, `api_key_env`. Voir [voice.md](voice.md).
+`timeout_s`, `stt_model`, `api_key_env` ; réponses vocales : `reply_voice`, `tts_url`, `tts_voice`,
+`tts_speed`, `tts_max_chars`, `tts_timeout_s`. Voir [voice.md](voice.md).
 
 ### `proactive`
 Alertes sur événements Home Assistant et routines planifiées (`enabled`, `alerts_enabled`,
@@ -111,7 +112,7 @@ Les GGUF servis par llama.cpp. Voir [models.md](models.md).
 | Clé | Rôle |
 |---|---|
 | `name` | nom utilisé par les backends et llama-swap |
-| `engine` | `gpu`, `cpu` ou `whisper` (modèle de transcription vocale, un seul) |
+| `engine` | `gpu`, `cpu`, `whisper` (transcription, un seul) ou `tts` (voix Piper, un seul ; son `.onnx.json` est téléchargé aussi, vérifié par `config_sha256`) |
 | `repo`, `file`, `sha256` | origine Hugging Face et empreinte vérifiée par `make models` |
 | `ctx_size`, `parallel` | contexte et requêtes simultanées |
 | `n_gpu_layers` | couches sur le GPU (99 = toutes) |

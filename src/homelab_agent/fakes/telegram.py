@@ -173,6 +173,24 @@ def create_app() -> FastAPI:
             )
             tg.sent.append({"op": "edit", **msg})
             return {"ok": True, "result": msg}
+        if m == "sendvoice":
+            form = await request.form()
+            upload = form.get("voice")
+            if isinstance(upload, str) and upload.startswith("attach://"):
+                upload = form.get(upload.removeprefix("attach://"))  # aiogram's multipart style
+            audio = (
+                await upload.read() if upload is not None and not isinstance(upload, str) else b""
+            )
+            msg = tg.store(int(str(form.get("chat_id"))), "", None)
+            fid = f"sent{msg['message_id']}"
+            msg["voice"] = {"file_id": fid, "file_unique_id": fid, "duration": 1}
+            tg.files[msg["voice"]["file_id"]] = audio  # downloadable like any voice note
+            try:
+                msg["voice_text"] = audio.decode("utf-8")  # fake TTS "audio" is plain text
+            except UnicodeDecodeError:
+                msg["voice_text"] = None
+            tg.sent.append({"op": "voice", **msg})
+            return {"ok": True, "result": msg}
         if m == "getfile":
             fid = str(p["file_id"])
             if fid not in tg.files:

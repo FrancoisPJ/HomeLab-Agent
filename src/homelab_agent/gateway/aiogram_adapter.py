@@ -11,7 +11,12 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 from aiogram.types import Message as TgMessage
 
 from homelab_agent.gateway.base import Gateway
@@ -64,6 +69,11 @@ class AiogramBotApi:
         except TelegramBadRequest as exc:
             if "not modified" not in str(exc):
                 raise
+
+    async def send_voice(self, chat_id: str, audio: bytes) -> None:
+        await self._retry(
+            lambda: self.bot.send_voice(int(chat_id), BufferedInputFile(audio, "reponse.ogg"))
+        )
 
     async def download_file(self, file_id: str) -> bytes:
         buf = await self.bot.download(file_id)

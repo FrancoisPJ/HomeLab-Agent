@@ -30,6 +30,7 @@ jobs:
             {"name": "agent", "file": "docker/agent.Dockerfile"},
             {"name": "llama-cpu", "file": "docker/llama-cpu.Dockerfile"},
             {"name": "whisper", "file": "docker/whisper.Dockerfile"},
+            {"name": "tts", "file": "docker/tts.Dockerfile"},
             {"name": "fakes", "file": "docker/fake-llm/Dockerfile"}'
           if [ "${{ github.event_name }}" != "push" ] || [[ "${{ github.ref }}" == refs/tags/* ]]; then
             images="$images"', {"name": "llama-gpu", "file": "docker/llama-gpu.Dockerfile"}'

@@ -24,7 +24,7 @@ Tout se vérifie avec des **faux services** (`src/homelab_agent/fakes/`) :
 | `fake llm` | llama-server / llama-swap | `[[tool:NOM {json}]]`, `[[escalate:cpu]]`, `[[sleep:2]]`, `[[error:503]]`, `POST /_control {"fail": true}` |
 | `fake ha` | Home Assistant (REST + WebSocket) | `POST /_test/state`, `GET /_test/calls` |
 | `fake telegram` | API Bot Telegram | `POST /_test/message`, `/_test/voice`, `/_test/callback`, `GET /_test/sent` |
-| `fake stt` / `fake tts` | whisper / Piper | renvoie le « texte » contenu dans l'audio |
+| `fake stt` / `fake tts` | whisper / Piper | l'« audio » est le texte lui-même (le faux TTS renvoie le texte, le faux STT le relit) |
 
 - Tests unitaires et d'intégration : `make test` (le harnais `tests/harness.py` câble l'agent sur
   les faux, sans réseau).

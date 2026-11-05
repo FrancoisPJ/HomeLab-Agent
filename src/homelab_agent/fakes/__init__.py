@@ -21,6 +21,10 @@ def create_fake(name: str) -> FastAPI:
         from homelab_agent.fakes.telegram import create_app as tg
 
         return tg()
+    if name == "tts":
+        from homelab_agent.fakes.tts import create_app as tts
+
+        return tts()
     if name == "stt":
         from homelab_agent.fakes.stt import create_app as stt
 

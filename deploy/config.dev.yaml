@@ -32,6 +32,8 @@ web: { enabled: true, port: 8099, password_env: PANEL_PASSWORD }
 voice:
   enabled: true
   stt_url: http://fake-stt:8080/v1/audio/transcriptions
+  reply_voice: when_voice
+  tts_url: http://fake-tts:8080/v1/audio/speech
 proactive:
   enabled: true
   alerts:

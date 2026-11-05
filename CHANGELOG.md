@@ -6,6 +6,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 ## [Non publié]
 
 ### Ajouté
+- **Réponses vocales** (Piper, local) : note vocale OGG/Opus en plus du texte (`voice.reply_voice`),
+  image `tts`, texte rendu prononçable ; aller-retour vérifié avec les vrais moteurs.
 - **Annuler la dernière action** : bouton ↩️ sous les commandes rapides, `/annuler`, « annule » ;
   passe par les permissions.
 - **Chat dans le panneau web** : deuxième passerelle (même agent, mêmes permissions), réponses en

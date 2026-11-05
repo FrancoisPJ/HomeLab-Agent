@@ -17,6 +17,7 @@ from homelab_agent.config.models import TelegramSection, Tier, VoiceSection
 from homelab_agent.gateway.base import ActionButton, IncomingMessage, Replier, StreamHandle
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.voice.stt import SpeechToText, STTError
+from homelab_agent.voice.tts import TextToSpeech, TTSError, speakable
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +46,8 @@ class BotApi(Protocol):
     async def answer_callback(self, callback_id: str, text: str = "") -> None: ...
 
     async def download_file(self, file_id: str) -> bytes: ...
+
+    async def send_voice(self, chat_id: str, audio: bytes) -> None: ...
 
 
 def split_text(text: str, limit: int) -> list[str]:
@@ -124,6 +127,50 @@ class StreamEditor:
             await self.api.send_message(self.chat_id, chunk)
 
 
+class _CapturingReplier:
+    """Wraps a replier and remembers the final answers (for the voice reply)."""
+
+    def __init__(self, inner: Replier) -> None:
+        self.inner = inner
+        self.answers: list[str] = []
+
+    async def send(self, text: str) -> None:
+        self.answers.append(text)
+        await self.inner.send(text)
+
+    def stream(self) -> StreamHandle:
+        handle = self.inner.stream()
+        outer = self
+
+        class _H:
+            async def update(self, text: str) -> None:
+                await handle.update(text)
+
+            async def finish(self, text: str) -> None:
+                outer.answers.append(text)
+                await handle.finish(text)
+
+        return _H()
+
+    async def confirm(self, question: str) -> bool:
+        return await self.inner.confirm(question)
+
+    async def send_actions(self, text: str, actions: list[ActionButton]) -> None:
+        self.answers.append(text)
+        send_actions = getattr(self.inner, "send_actions", None)
+        if send_actions is not None:
+            await send_actions(text, actions)
+        else:
+            await self.inner.send(text)
+
+    def last_answer(self) -> str:
+        skip = ("🎤", "↗️", "ℹ️", "⏳", "⚠️ Budget")
+        for text in reversed(self.answers):
+            if not text.startswith(skip):
+                return text
+        return ""
+
+
 class TelegramReplier:
     def __init__(
         self, frontend: TelegramFrontend, chat_id: str, user_id: str | None = None
@@ -177,6 +224,7 @@ class TelegramFrontend:
         commands: dict[str, ChatCommand] | None = None,
         voice: Callable[[], VoiceSection] | None = None,
         stt: SpeechToText | None = None,
+        tts: TextToSpeech | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.api = api
@@ -190,6 +238,7 @@ class TelegramFrontend:
         self.commands = commands or {}
         self.voice = voice
         self.stt = stt
+        self.tts = tts
         self._pending: dict[str, tuple[str, asyncio.Future[bool], str | None]] = {}
         self._actions: dict[str, tuple[str, ActionButton, float]] = {}
         self.callbacks: dict[str, CallbackHandler] = {}  # prefix -> handler (e.g. "hm")
@@ -268,7 +317,7 @@ class TelegramFrontend:
             else:
                 await replier.send("Commande inconnue. /help pour la liste.")
             return
-        await self._run(IncomingMessage(str(user_id), chat, text), replier)
+        await self._run_and_speak(IncomingMessage(str(user_id), chat, text), replier, spoke=False)
 
     async def on_voice(
         self,
@@ -311,7 +360,32 @@ class TelegramFrontend:
             return
         if section.echo_transcript:
             await replier.send(f"🎤 « {text} »")
-        await self._run(IncomingMessage(str(user_id), str(chat_id), text), replier)
+        await self._run_and_speak(
+            IncomingMessage(str(user_id), str(chat_id), text), replier, spoke=True
+        )
+
+    async def _run_and_speak(self, msg: IncomingMessage, replier: Replier, spoke: bool) -> None:
+        """Handle a message; answer with a voice note too when voice.reply_voice asks for it."""
+        section = self.voice() if self.voice else None
+        mode = section.reply_voice if section is not None and section.enabled else "never"
+        if self.tts is None or mode == "never" or (mode == "when_voice" and not spoke):
+            await self._run(msg, replier)
+            return
+        assert section is not None
+        capture = _CapturingReplier(replier)
+        await self._run(msg, capture)
+        answer = capture.last_answer()
+        if not answer:
+            return
+        text = speakable(answer, section.tts_max_chars)
+        if not text:
+            return
+        try:
+            audio = await self.tts.synthesize(text)
+            await self.api.send_voice(msg.chat_id, audio)
+            METRICS.inc("voice_replies_total")
+        except TTSError as exc:
+            log.warning("voice reply failed: %s", exc)
 
     async def _run(self, msg: IncomingMessage, replier: Replier) -> None:
         try:

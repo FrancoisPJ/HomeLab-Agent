@@ -5,7 +5,7 @@
 #   cpu-only  agent + llama-cpu               (pas de GPU : le niveau GPU bascule sur le CPU)
 #   no-gpu    agent seul                      (moteurs ailleurs ou cloud uniquement)
 #   dev       agent + faux services (LLM, Home Assistant, Telegram, voix) — aucune dépendance réelle
-#   voice     moteur de transcription whisper.cpp, à ajouter à un autre profil :
+#   voice     voix : transcription (whisper.cpp) et synthèse (Piper), à ajouter à un autre profil :
 #             make up PROFILE=full,voice   (= COMPOSE_PROFILES=full,voice docker compose up -d)
 #
 #   make up                 # = docker compose --profile full up -d
@@ -92,6 +92,19 @@ services:
     volumes:
       - ${MODELS_DIR:-./models}:/models:ro
 
+  tts:
+    <<: *llama
+    profiles: [voice]
+    build:
+      context: .
+      dockerfile: docker/tts.Dockerfile
+    image: homelab-agent-tts:local
+    env_file:
+      - path: ./engines/tts.env
+        required: false
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+
   # ------------------------------------------------------------------ dev profile
   agent-dev:
     <<: *agent
@@ -115,6 +128,7 @@ services:
       fake-ha: { condition: service_healthy }
       fake-telegram: { condition: service_healthy }
       fake-stt: { condition: service_healthy }
+      fake-tts: { condition: service_healthy }
 
   fake-llm-gpu: &fake
     profiles: [dev]
@@ -153,6 +167,11 @@ services:
     <<: *fake
     command: ["stt", "--port", "8080"]
     ports: ["127.0.0.1:18082:8080"]
+
+  fake-tts:
+    <<: *fake
+    command: ["tts", "--port", "8080"]
+    ports: ["127.0.0.1:18083:8080"]
 
 volumes:
   dev-data:

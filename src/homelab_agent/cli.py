@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("models", help="list models to download (TSV: repo, file, sha256)")
     sub.add_parser("healthcheck", help="exit 0 when the running agent is healthy (Docker)")
     p_fake = sub.add_parser("fake", help="run a fake service (tests / dev)")
-    p_fake.add_argument("service", choices=["llm", "ha", "telegram", "stt"])
+    p_fake.add_argument("service", choices=["llm", "ha", "telegram", "stt", "tts"])
     p_fake.add_argument("--port", type=int, default=8080)
     args = parser.parse_args(argv)
 

@@ -191,6 +191,8 @@ voice:
   language: fr
   max_duration_s: 120           # vocaux plus longs refusés
   echo_transcript: true         # répond d'abord 🎤 « ce que j'ai compris »
+  reply_voice: never            # réponse vocale (Piper) : never | when_voice | always
+  tts_url: http://tts:8080/v1/audio/speech
 
 # -----------------------------------------------------------------------------
 #  Modèles GGUF servis par llama.cpp (via llama-swap). C'est ICI qu'on choisit
@@ -226,6 +228,12 @@ models:
       file: ggml-small.bin
       sha256: 1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
       threads: 4
+    - name: voix                # réponses vocales (téléchargé seulement si reply_voice ≠ never)
+      engine: tts
+      repo: rhasspy/piper-voices
+      file: fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx
+      sha256: 641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99
+      config_sha256: 39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959
 
 store:
   path: ./data/agent.db

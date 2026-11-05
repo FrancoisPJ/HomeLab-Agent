@@ -687,11 +687,12 @@
           "type": "string"
         },
         "engine": {
-          "description": "gpu / cpu: llama.cpp engines; whisper: speech-to-text model (voice).",
+          "description": "gpu / cpu: llama.cpp engines; whisper: speech-to-text model; tts: Piper voice (.onnx, its .onnx.json is downloaded too).",
           "enum": [
             "gpu",
             "cpu",
-            "whisper"
+            "whisper",
+            "tts"
           ],
           "title": "Engine",
           "type": "string"
@@ -717,6 +718,19 @@
           ],
           "default": null,
           "title": "Sha256"
+        },
+        "config_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "tts: sha256 of the .onnx.json file.",
+          "title": "Config Sha256"
         },
         "ctx_size": {
           "default": 4096,
@@ -1524,6 +1538,57 @@
           "description": "Reply with what was understood first.",
           "title": "Echo Transcript",
           "type": "boolean"
+        },
+        "reply_voice": {
+          "default": "never",
+          "description": "Also answer with a voice note: never, when you spoke (when_voice), always.",
+          "enum": [
+            "never",
+            "when_voice",
+            "always"
+          ],
+          "title": "Reply Voice",
+          "type": "string"
+        },
+        "tts_url": {
+          "default": "http://tts:8080/v1/audio/speech",
+          "description": "OpenAI-style speech endpoint (docker/tts: Piper, OGG/Opus).",
+          "title": "Tts Url",
+          "type": "string"
+        },
+        "tts_voice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Voice name sent to the TTS server.",
+          "title": "Tts Voice"
+        },
+        "tts_speed": {
+          "default": 1.0,
+          "maximum": 2.0,
+          "minimum": 0.5,
+          "title": "Tts Speed",
+          "type": "number"
+        },
+        "tts_max_chars": {
+          "default": 600,
+          "description": "Longer answers are cut.",
+          "maximum": 1500,
+          "minimum": 50,
+          "title": "Tts Max Chars",
+          "type": "integer"
+        },
+        "tts_timeout_s": {
+          "default": 60,
+          "exclusiveMinimum": 0,
+          "title": "Tts Timeout S",
+          "type": "number"
         }
       },
       "title": "VoiceSection",

@@ -283,12 +283,14 @@ class ModelItem(_Base):
     """A GGUF model served by llama.cpp. Rendered into llama-swap configs."""
 
     name: str = Field(description="Name used by backends (`model:` field) and llama-swap.")
-    engine: Literal["gpu", "cpu", "whisper"] = Field(
-        description="gpu / cpu: llama.cpp engines; whisper: speech-to-text model (voice)."
+    engine: Literal["gpu", "cpu", "whisper", "tts"] = Field(
+        description="gpu / cpu: llama.cpp engines; whisper: speech-to-text model; "
+        "tts: Piper voice (.onnx, its .onnx.json is downloaded too)."
     )
     repo: str = Field(description="Hugging Face repository, e.g. Qwen/Qwen3-4B-GGUF")
     file: str = Field(description="GGUF file in the repository.")
     sha256: str | None = None
+    config_sha256: str | None = Field(None, description="tts: sha256 of the .onnx.json file.")
     ctx_size: int = Field(4096, ge=512)
     n_gpu_layers: int = Field(99, ge=0, description="Layers offloaded to the GPU (gpu engine).")
     threads: int | None = Field(None, ge=1, description="CPU threads (default: engine setting).")
@@ -364,6 +366,18 @@ class VoiceSection(_Base):
     timeout_s: float = Field(120, gt=0)
     max_duration_s: int = Field(120, ge=1, description="Longer voice notes are refused.")
     echo_transcript: bool = Field(True, description="Reply with what was understood first.")
+    reply_voice: Literal["never", "when_voice", "always"] = Field(
+        "never",
+        description="Also answer with a voice note: never, when you spoke (when_voice), always.",
+    )
+    tts_url: str = Field(
+        "http://tts:8080/v1/audio/speech",
+        description="OpenAI-style speech endpoint (docker/tts: Piper, OGG/Opus).",
+    )
+    tts_voice: str | None = Field(None, description="Voice name sent to the TTS server.")
+    tts_speed: float = Field(1.0, ge=0.5, le=2.0)
+    tts_max_chars: int = Field(600, ge=50, le=1500, description="Longer answers are cut.")
+    tts_timeout_s: float = Field(60, gt=0)
 
 
 # ----------------------------------------------------------------------- proactive
@@ -560,6 +574,8 @@ class AppConfig(_Base):
             raise ValueError(f"duplicate model names in models.items: {sorted(dupes)}")
         if len([m for m in self.models.items if m.engine == "whisper"]) > 1:
             raise ValueError("only one models.items entry may use engine 'whisper'")
+        if len([m for m in self.models.items if m.engine == "tts"]) > 1:
+            raise ValueError("only one models.items entry may use engine 'tts'")
         return self
 
     # -- helpers -----------------------------------------------------------

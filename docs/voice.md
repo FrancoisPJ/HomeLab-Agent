@@ -69,7 +69,50 @@ réponse JSON `{"text": ...}`) : par exemple un serveur faster-whisper. `stt_mod
 champ `model` et `api_key_env` ajoute un en-tête `Authorization` si besoin. N'utilise pas une API
 cloud si tu veux garder l'audio chez toi.
 
+## Réponses vocales (Piper)
+
+L'agent peut aussi **répondre par une note vocale**, synthétisée en local par
+[Piper](https://github.com/OHF-Voice/piper1-gpl) :
+
+```yaml
+voice:
+  enabled: true
+  reply_voice: when_voice     # never | when_voice (si tu as parlé) | always
+  tts_url: http://tts:8080/v1/audio/speech
+models:
+  items:
+    - name: voix
+      engine: tts
+      repo: rhasspy/piper-voices
+      file: fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx
+      sha256: 641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99
+      config_sha256: 39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959
+```
+
+Puis `make engines models` et `make up PROFILE=full,voice` (le profil `voice` lance `whisper` et `tts`).
+
+- La réponse texte arrive toujours ; la note vocale suit (OGG/Opus, le format des vocaux Telegram).
+- Le texte est rendu « prononçable » : émojis, liens, code et marques de formatage retirés, longueur
+  limitée (`tts_max_chars`), et les réponses techniques du chemin rapide sont dites en français
+  (« ✅ light.turn_off → salon » devient « C'est fait. J'ai éteint « salon ». »).
+- Si la synthèse échoue, seule la réponse texte est envoyée.
+- Les réponses des tâches CPU différées ne sont pas lues.
+
+**Mesures pendant le développement (4 vCPU de cloud, pas ton matériel)** : une phrase est
+synthétisée en ~1,2 s. Boucle complète avec les vrais moteurs — vocal généré par Piper, transcrit
+par whisper (`ggml-small`), chemin rapide, réponse synthétisée — en **3 s**. Whisper a retranscrit
+mot pour mot « Éteins la lumière du salon, s'il te plaît. » et « La lumière du salon est éteinte. Il
+fait 21° et demi. ». Sur des phrases très courtes, il se trompe parfois (« éteint » entendu « tant ») :
+la tournure des confirmations a été choisie pour rester intelligible.
+
+**Licences.** Piper est sous GPL-3.0 : il tourne dans son propre conteneur, comme un programme
+séparé ; le code du projet (Apache-2.0) ne l'importe pas et lui parle en HTTP
+(`docker/tts/server.py`). La voix par défaut **siwis** est sous CC-BY 4.0 (corpus SIWIS, université
+d'Édimbourg, <https://datashare.is.ed.ac.uk/handle/10283/2353>) : l'attribution est requise si tu
+diffuses des enregistrements. Autres voix françaises : `tom` (AGPLv3), `upmc` (CC-BY-SA 4.0) — lis
+leur fiche (`MODEL_CARD`) avant de les utiliser.
+
 ## Pistes
 
-- **Réponse vocale** (synthèse locale, par exemple Piper) renvoyée comme note vocale.
 - Transcription sur GPU quand la VRAM est libre (image whisper.cpp CUDA).
+- Choisir la voix par conversation.
