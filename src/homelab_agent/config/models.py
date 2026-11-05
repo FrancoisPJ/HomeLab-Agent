@@ -276,6 +276,11 @@ class WebSection(_Base):
     bind: str = "127.0.0.1"
     port: int = Field(8099, ge=1, le=65535)
     password_env: str = "PANEL_PASSWORD"
+    grafana_url: str | None = Field(
+        None,
+        pattern=r"^https?://[^\s\"'<>]+$",
+        description="Link to Grafana in the panel navigation, e.g. http://127.0.0.1:3000",
+    )
     metrics_token_env: str | None = Field(
         "METRICS_TOKEN",
         description="Token that only grants GET /metrics (for Prometheus); unset = password only.",

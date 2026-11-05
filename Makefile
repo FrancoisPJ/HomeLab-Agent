@@ -9,7 +9,7 @@ RUN := $(UV) run
 
 .DEFAULT_GOAL := help
 .PHONY: help setup init lint format typecheck test cov check schema schema-check engines models \
-        up down restart logs ps dev dev-down e2e bench build gitleaks
+        up down restart logs ps dev dev-down dev-monitoring e2e bench build gitleaks
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}'
@@ -19,7 +19,7 @@ setup: ## Install Python deps (uv) and git hooks
 	$(RUN) pre-commit install || true
 
 init: ## Create .env, config.yaml, data/, models/ (PRESET=cpu-only for a host without GPU)
-	@test -f .env || (cp .env.example .env && echo "created .env — edit it")
+	@test -f .env || (cp .env.example .env && python3 scripts/init_env.py .env && echo "created .env — edit it")
 	@test -f $(CONFIG) || (cp config$(if $(PRESET),.$(PRESET)).example.yaml $(CONFIG) && echo "created $(CONFIG) from the $(or $(PRESET),default) preset — edit it")
 	@mkdir -p data models engines
 
@@ -80,7 +80,11 @@ dev: ## Dev stack with fake services + hot reload
 	COMPOSE_PROFILES=dev $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 dev-down:
-	COMPOSE_PROFILES=dev $(COMPOSE) down -v
+	COMPOSE_PROFILES=dev,monitoring $(COMPOSE) down -v
+
+dev-monitoring: ## Dev stack + Prometheus + Grafana (http://127.0.0.1:3000, admin / change-me-grafana)
+	COMPOSE_PROFILES=dev,monitoring $(COMPOSE) up -d --build --wait
+	@echo "panel: http://127.0.0.1:8099 (dev-password-123) · grafana: http://127.0.0.1:3000"
 
 e2e: ## End-to-end scenario against the dev stack
 	COMPOSE_PROFILES=dev $(COMPOSE) up -d --build --wait

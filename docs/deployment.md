@@ -19,7 +19,8 @@ git clone https://github.com/FrancoisPJ/HomeLab-Agent.git && cd HomeLab-Agent
 make init                     # ou : make init PRESET=cpu-only  (machine sans GPU)
 ```
 
-Éditez `.env` (tokens, `PANEL_PASSWORD`, `HLA_UID`/`HLA_GID` si votre uid n'est pas 1000) et
+Éditez `.env` (tokens ; `PANEL_PASSWORD`, `METRICS_TOKEN` et `GRAFANA_ADMIN_PASSWORD` sont déjà
+générés par `make init` ; `HLA_UID`/`HLA_GID` si votre uid n'est pas 1000) et
 `config.yaml` (`allowed_user_ids`, `home_assistant.url`, modèles, routage). Puis :
 
 ```bash

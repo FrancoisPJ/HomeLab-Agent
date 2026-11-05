@@ -1,7 +1,6 @@
 {% extends "base.html" %}{% block title %}Permissions{% endblock %}
 {% block content %}
-<h1>Permissions Home Assistant</h1>
-<p class="muted">Appliquées par le code à chaque action (LLM local, cloud ou chemin rapide). Les modifications sont écrites dans <code>config.yaml</code> et prises en compte immédiatement.</p>
+<div class="hero"><div><h1>Permissions Home Assistant</h1><p>Appliquées par le code à chaque action (LLM local, cloud ou chemin rapide). Les modifications sont écrites dans <code>config.yaml</code> et prises en compte immédiatement.</p></div></div>
 <div class="card"><h2>Politique par défaut</h2>
 <form method="post" action="/permissions/default" class="inline">
 <select name="policy">{% for p in policies %}<option value="{{ p }}" {{ 'selected' if cfg.home_assistant.default_policy.value == p }}>{{ p }}</option>{% endfor %}</select>

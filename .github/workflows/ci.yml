@@ -40,6 +40,12 @@ jobs:
         run: uv run homelab-agent schema | diff -u config.schema.json -
       - name: example config is valid
         run: uv run homelab-agent -c config.example.yaml check-config
+      - name: Grafana dashboard is up to date
+        run: uv run python scripts/grafana_dashboard.py --check
+      - name: compose file is valid (every profile)
+        run: |
+          cp .env.example .env
+          COMPOSE_PROFILES=full,voice,monitoring,dev docker compose config --quiet
 
   test:
     name: Tests (fake backends)

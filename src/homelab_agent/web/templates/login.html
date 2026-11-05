@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>homelab-agent · Connexion</title><link rel="stylesheet" href="/static/style.css"></head>
-<body><main style="max-width:380px">
-<div class="card"><h1>🏠 homelab-agent</h1>
-<form method="post" action="/login" class="inline">
-<input type="password" name="password" placeholder="Mot de passe" autofocus required>
-<button>Entrer</button></form>
-{% if error %}<p class="error">{{ error }}</p>{% endif %}
-</div></main></body></html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>homelab-agent · Connexion</title>
+<script>try { const t = localStorage.getItem("hla-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/ui.js" defer></script></head>
+<body>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+<main class="login-page">
+  <div class="login">
+    <div class="orb"></div>
+    <h1>homelab-agent</h1>
+    <p class="muted">Ton assistant domestique, en local.</p>
+    <form method="post" action="/login">
+      <input type="password" name="password" placeholder="Mot de passe" autocomplete="current-password" autofocus required>
+      <button>Entrer</button>
+    </form>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  </div>
+</main>
+</body></html>

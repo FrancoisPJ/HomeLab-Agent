@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import (
@@ -25,7 +28,9 @@ from homelab_agent.core.router import TIER_LABELS
 from homelab_agent.core.routines import fr_days, fr_when
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.web.auth import COOKIE, check_password, check_session, make_session
+from homelab_agent.web.charts import TIER_COLORS, TIER_NAMES, donut, percentile, sparkline
 from homelab_agent.web.chat import WEB_CHAT, inbox_events, turn_events
+from homelab_agent.web.summary import house_summary
 
 if TYPE_CHECKING:
     from homelab_agent.app import Services
@@ -156,8 +161,68 @@ def create_app(services: Services) -> FastAPI:
             ha=services.ha,
             day=day,
             month=month,
-            interactions=await services.db.recent_interactions(20),
+            interactions=await services.db.recent_interactions(12),
+            dash=await dashboard_data(day),
         )
+
+    async def dashboard_data(day: float) -> dict[str, Any]:
+        """Last 24 h at a glance: hourly activity, latency, tiers and spend (server-side SVG)."""
+        cfg = services.cfg
+        now = datetime.now(UTC)
+        since = now - timedelta(hours=24)
+        rows = await services.db.interactions_since(since)
+        spend = await services.db.spend_rows_since(since)
+
+        def hour_index(t: datetime) -> int:
+            age = (now - t.replace(tzinfo=UTC)).total_seconds() / 3600
+            return max(0, min(23, 23 - int(age)))
+
+        per_hour = [0.0] * 24
+        lat_hour: list[list[float]] = [[] for _ in range(24)]
+        tiers: dict[str, int] = {}
+        sync: list[float] = []
+        for r in rows:
+            h = hour_index(r.created_at)
+            per_hour[h] += 1
+            tiers[r.tier] = tiers.get(r.tier, 0) + 1
+            if r.tier != "cpu":  # background jobs are slow on purpose
+                lat_hour[h].append(r.latency_ms)
+                sync.append(r.latency_ms)
+        spend_hour = [0.0] * 24
+        for t, c in spend:
+            spend_hour[hour_index(t)] += c
+        cumulative = list(itertools.accumulate(spend_hour))
+        local = now.astimezone(ZoneInfo(cfg.agent.timezone))
+        greeting = (
+            "Bonne nuit" if local.hour < 5 else "Bonjour" if local.hour < 12
+            else "Bon après-midi" if local.hour < 18 else "Bonsoir"
+        )  # fmt: skip
+        order = ["fast_path", "gpu", "cpu", "cloud"]
+        segments = [
+            (TIER_NAMES.get(t, t), float(tiers[t]), TIER_COLORS.get(t, "#94a3b8"))
+            for t in sorted(tiers, key=lambda t: order.index(t) if t in order else 9)
+        ]
+        p95 = percentile(sync, 0.95)
+        return {
+            "greeting": greeting,
+            "date": f"{local:%d/%m/%Y · %H:%M}",
+            "messages": int(sum(per_hour)),
+            "spark_messages": sparkline(per_hour, "#a78bfa"),
+            "p95": p95,
+            "p95_label": f"{p95 / 1000:.1f}" if p95 >= 1000 else f"{p95:.0f}",
+            "p95_unit": "s" if p95 >= 1000 else "ms",
+            "spark_latency": sparkline([percentile(v, 0.95) for v in lat_hour], "#f472b6"),
+            "spark_spend": sparkline(cumulative, "#fbbf24"),
+            # real ratio (can exceed 100 % when one request overshoots the cap)
+            "budget_pct": round(100 * day / cfg.cloud.limits.daily_eur)
+            if cfg.cloud.limits.daily_eur > 0
+            else 0,
+            "house": house_summary(services.ha.client.cache.entities.values())
+            if services.ha is not None
+            else None,
+            "donut": donut(segments, center_label="réponses 24 h"),
+            "segments": segments,
+        }
 
     @app.get("/api/status")
     async def api_status() -> dict[str, Any]:

@@ -28,15 +28,29 @@ Les **messages vocaux** Telegram sont transcrits en local avec whisper.cpp, et l
 
 ## Aperçu
 
-| Chat du panneau (streaming, bouton ↩️ Annuler, mémoire, tâche CPU) | Domotique proactive |
-|---|---|
-| ![Chat du panneau web](docs/images/chat-light.png) | ![Alertes et routines](docs/images/proactive.png) |
-| **État des moteurs et dernières réponses** | **Confirmation d'une action sensible (thème sombre)** |
-| ![État](docs/images/status.png) | ![Confirmation Oui/Non](docs/images/chat-dark.png) |
+![Panneau web, thème sombre](docs/images/status-dark.webp)
 
-<sub>Captures de la stack `make dev` : les moteurs, Home Assistant et Telegram y sont simulés (d'où
-les « Réponse simulée »). Autres pages : [permissions](docs/images/permissions.png),
-[audit](docs/images/audit.png).</sub>
+Panneau web en « verre liquide » : surfaces dépolies sur une aurore animée, reflet qui suit la
+souris, thèmes clair / sombre / auto, palette de commandes <kbd>Ctrl</kbd> <kbd>K</kbd>, et une
+vraie barre d'onglets sur téléphone.
+
+| Chat (streaming, ↩️ Annuler, mémoire, tâche CPU) | Confirmation d'une action sensible |
+|---|---|
+| ![Chat du panneau web](docs/images/chat-light.webp) | ![Confirmation Oui/Non](docs/images/chat-dark.webp) |
+| **Domotique proactive** | **Palette de commandes** |
+| ![Alertes et routines](docs/images/proactive.webp) | ![Palette Ctrl K](docs/images/palette.webp) |
+
+![Sur téléphone : accueil, chat, palette](docs/images/phone.webp)
+
+| Supervision Grafana (profil `monitoring`) |
+|---|
+| <img src="docs/images/grafana.webp" alt="Tableau de bord Grafana" width="720"> |
+
+<sub>Captures de la stack de développement : les moteurs, Home Assistant et Telegram y sont simulés
+(d'où les « Réponse simulée », la fuite et la température de 30 °C), et le plafond cloud de dev est
+volontairement minuscule (d'où le budget « dépassé »). Autres pages :
+[thème clair](docs/images/status-light.webp), [permissions](docs/images/permissions.webp),
+[budget](docs/images/budget.webp), [audit](docs/images/audit.webp).</sub>
 
 ## Architecture
 
@@ -47,7 +61,8 @@ Telegram ─► gateway ─► orchestrateur ─► routeur ─┬─► GPU   l
                             └─► outils ─► Home Assistant (REST + WebSocket)
                                   ▲
                moteur de permissions + journal d'audit
-Panneau web (127.0.0.1) : état, permissions, budget, jobs, audit, configuration
+Panneau web (127.0.0.1) : état, chat, permissions, budget, jobs, audit, configuration
+/metrics ─► Prometheus ─► Grafana (profil monitoring, facultatif)
 SQLite : conversations, jobs, dépenses, audit
 ```
 
@@ -69,7 +84,7 @@ le budget est atteint. Détails : [docs/architecture.md](docs/architecture.md).
 
 ```bash
 git clone https://github.com/FrancoisPJ/HomeLab-Agent.git && cd HomeLab-Agent
-make init                 # crée .env et config.yaml depuis les exemples
+make init                 # crée .env (mots de passe générés) et config.yaml
 nano .env config.yaml     # tokens, votre identifiant Telegram, URL de Home Assistant
 make models               # télécharge les modèles GGUF choisis dans config.yaml (+ SHA256)
 make up                   # construit et démarre (profil full : agent + GPU + CPU)
@@ -79,7 +94,8 @@ Sans `make` : `cp .env.example .env && cp config.example.yaml config.yaml`, puis
 `uv run homelab-agent render-engines -o engines`, `./scripts/download-models.sh` et
 `docker compose --profile full up -d --build`.
 
-Le panneau est ensuite sur <http://127.0.0.1:8099> (mot de passe `PANEL_PASSWORD`), avec un **chat**
+Le panneau est ensuite sur <http://127.0.0.1:8099> (mot de passe : `PANEL_PASSWORD` dans `.env`,
+généré par `make init`), avec un **chat**
 intégré pour parler à l'agent sans Telegram. Sur un serveur
 distant : `ssh -L 8099:127.0.0.1:8099 serveur`.
 
@@ -91,9 +107,11 @@ distant : `ssh -L 8099:127.0.0.1:8099 serveur`.
 | `cpu-only` | agent, llama-cpu | pas de GPU : avec `make init PRESET=cpu-only`, un petit modèle CPU sert le niveau rapide |
 | `no-gpu` | agent | moteurs hébergés ailleurs (changez les `url`) ou cloud seul |
 | `voice` | whisper (transcription) et tts (Piper) | à ajouter : `make up PROFILE=full,voice` |
+| `monitoring` | Prometheus + Grafana (tableau de bord fourni) | à ajouter : `make up PROFILE=full,monitoring` — voir [docs/monitoring.md](docs/monitoring.md) |
 | `dev` | agent + faux LLM, faux Home Assistant, fausse API Telegram, faux STT | développement, démo, tests e2e |
 
-`make up PROFILE=cpu-only`, `make dev` (rechargement à chaud), `make e2e` (scénario complet).
+`make up PROFILE=cpu-only`, `make dev` (rechargement à chaud), `make dev-monitoring` (démo avec
+Grafana), `make e2e` (scénario complet).
 
 ## Choisir les modèles et le reste de la configuration
 

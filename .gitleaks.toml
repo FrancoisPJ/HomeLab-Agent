@@ -9,6 +9,8 @@ regexes = [
   '''123456:TEST''',
   '''000000000:REPLACE_ME''',
   '''dev-password-123''',
+  '''dev-metrics-token-0123456789''',
+  '''change-me-grafana''',
   '''fake-ha-token''',
   '''correct-horse-battery''',
 ]

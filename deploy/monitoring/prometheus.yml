@@ -1,0 +1,20 @@
+# Prometheus for homelab-agent (compose profile "monitoring").
+# The scrape token is written to /tmp/metrics_token at start-up from METRICS_TOKEN
+# (see docker-compose.yml): it only grants GET /metrics, never the panel.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: homelab-agent
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /tmp/metrics_token
+    static_configs:
+      - targets: ["agent:8099"]
+        labels:
+          instance: homelab-agent
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

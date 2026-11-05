@@ -1,27 +1,90 @@
 {% extends "base.html" %}{% block title %}État{% endblock %}
 {% block content %}
-<h1>État</h1>
-<div class="grid">
-  <div class="card"><h2>Cloud</h2>
-    <div class="big {{ 'ok' if cfg.cloud.enabled else 'muted' }}">{{ 'activé' if cfg.cloud.enabled else 'désactivé' }}</div>
-    <div class="muted">Jour {{ '%.2f'|format(day) }} € / {{ '%.2f'|format(cfg.cloud.limits.daily_eur) }} € ·
-    Mois {{ '%.2f'|format(month) }} € / {{ '%.2f'|format(cfg.cloud.limits.monthly_eur) }} €</div></div>
-  <div class="card"><h2>Home Assistant</h2>
-    {% if ha %}
-      <div class="big {{ 'ok' if ha.client.connected else 'bad' }}">{{ 'connecté' if ha.client.connected else 'déconnecté' }}</div>
-      <div class="muted">{{ ha.client.cache.entities|length }} entités en cache</div>
-    {% else %}<div class="big muted">désactivé</div>{% endif %}
+<div class="hero">
+  <div>
+    <h1>{{ dash.greeting }} 👋</h1>
+    <p>{{ dash.date }} · voici l'état de la maison et de l'agent.</p>
+  </div>
+  <div class="inline">
+    <span class="chip"><span class="status-orb {{ 'ok' if ha and ha.client.connected else 'bad' }}"></span>Home Assistant</span>
+    <span class="chip"><span class="status-orb {{ 'ok' if cfg.cloud.enabled else '' }}"></span>Cloud {{ 'activé' if cfg.cloud.enabled else 'coupé' }}</span>
   </div>
 </div>
-<div class="card"><h2>Moteurs</h2>
-<table><tr><th>Niveau</th><th>Backend</th><th>Modèle</th><th>État</th></tr>
-{% for b in backends %}<tr><td>{{ b.tier }}</td><td><code>{{ b.name }}</code></td><td><code>{{ b.model }}</code></td>
-<td class="{{ 'ok' if b.up else 'bad' }}">{{ ('🟢 disponible' if b.up else '🔴 indisponible') if b.probed else '… en attente' }}</td></tr>{% endfor %}
-</table></div>
-<div class="card"><h2>Dernières réponses</h2>
-<table><tr><th>Date (UTC)</th><th>Niveau</th><th>Backend</th><th>Latence</th><th>Jetons</th><th>Coût</th></tr>
-{% for i in interactions %}<tr><td>{{ i.created_at.strftime('%d/%m %H:%M:%S') }}</td><td>{{ i.tier }}</td><td>{{ i.backend }}</td>
-<td>{{ i.latency_ms }} ms</td><td>{{ i.tokens_in }} / {{ i.tokens_out }}</td><td>{{ '%.4f'|format(i.cost_eur) }} €</td></tr>
-{% else %}<tr><td colspan="6" class="muted">Rien pour l'instant.</td></tr>{% endfor %}
-</table></div>
+
+<div class="grid">
+  <div class="tile">
+    <div class="glow" style="background:#a78bfa"></div>
+    <div class="label">Messages · 24 h</div>
+    <div class="value"><span data-count>{{ dash.messages }}</span></div>
+    {{ dash.spark_messages }}
+  </div>
+  <div class="tile">
+    <div class="glow" style="background:#f472b6"></div>
+    <div class="label">Latence p95</div>
+    <div class="value"><span data-count>{{ dash.p95_label }}</span><small>{{ dash.p95_unit }}</small></div>
+    <div class="hint">réponses immédiates (hors tâches CPU)</div>
+    {{ dash.spark_latency }}
+  </div>
+  <div class="tile">
+    <div class="glow" style="background:#fbbf24"></div>
+    <div class="label">Cloud · aujourd'hui</div>
+    <div class="value"><span data-count>{{ '%.2f'|format(day) }}</span><small>€ / {{ '%.2f'|format(cfg.cloud.limits.daily_eur) }}</small></div>
+    <div class="meter{{ ' over' if dash.budget_pct >= 100 else (' warn' if dash.budget_pct >= 80 else '') }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ [dash.budget_pct, 100]|min }}" aria-label="Plafond journalier"><i style="width:{{ [dash.budget_pct, 100]|min }}%"></i></div>
+    <div class="hint">{{ dash.budget_pct }} % du plafond{{ ' — dépassé' if dash.budget_pct > 100 }} · mois {{ '%.2f'|format(month) }} €</div>
+    {{ dash.spark_spend }}
+  </div>
+  <div class="tile">
+    <div class="glow" style="background:#22d3ee"></div>
+    <div class="label">Maison</div>
+    {% if ha %}{% set h = dash.house %}
+    <div class="value"><span data-count>{{ ha.client.cache.entities|length }}</span><small>entités</small></div>
+    <div class="hint">{{ 'connectée en direct (WebSocket)' if ha.client.connected else 'déconnectée' }}</div>
+    <div class="house">
+      {% for name in h.alerts %}<span class="chip alert" title="Alerte en cours">⚠️ {{ name }}</span>{% endfor %}
+      {% if h.lights %}<span class="chip" title="Lumières allumées">💡 {{ h.lights_on }}/{{ h.lights }}</span>{% endif %}
+      {% if h.temp is not none %}<span class="chip" title="Température moyenne">🌡️ {{ h.temp }} °C</span>{% endif %}
+      {% if h.unlocked %}<span class="chip warn-chip" title="{{ h.unlocked|join(', ') }}">🔓 {{ h.unlocked|length }} ouverte{{ 's' if h.unlocked|length > 1 }}</span>
+      {% else %}<span class="chip" title="Serrures">🔒 verrouillé</span>{% endif %}
+      {% if h.opened %}<span class="chip" title="{{ h.opened|join(', ') }}">🚪 {{ h.opened|length }} ouvert{{ 's' if h.opened|length > 1 }}</span>{% endif %}
+    </div>
+    {% else %}<div class="value muted">—</div><div class="hint">Home Assistant désactivé</div>{% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>Moteurs</h2>
+    <div class="engines">
+      {% for b in backends %}
+      <div class="engine">
+        <span class="status-orb {{ ('ok' if b.up else 'bad') if b.probed else '' }}"></span>
+        <div><b>{{ b.tier|capitalize }} · {{ b.name }}</b><code>{{ b.model }}</code>
+          <div class="{{ 'ok' if b.up else 'bad' }}" style="font-size:.82rem">{{ ('disponible' if b.up else 'indisponible') if b.probed else 'en attente de sonde' }}</div></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <h2>Qui répond ?</h2>
+    {% if dash.segments %}
+    <div class="donut-wrap">
+      {{ dash.donut }}
+      <div class="legend">
+        {% for label, value, color in dash.segments %}
+        <span><i style="background:{{ color }}"></i>{{ label }}<b>{{ value|int }}</b></span>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}<p class="muted">Aucune réponse ces dernières 24 h.</p>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Dernières réponses</h2>
+  <table><tr><th>Heure (UTC)</th><th>Niveau</th><th>Moteur</th><th>Latence</th><th>Jetons</th><th>Coût</th></tr>
+  {% for i in interactions %}<tr><td>{{ i.created_at.strftime('%d/%m %H:%M:%S') }}</td><td><span class="pill">{{ i.tier }}</span></td><td><code>{{ i.backend }}</code></td>
+  <td>{{ i.latency_ms }} ms</td><td>{{ i.tokens_in }} / {{ i.tokens_out }}</td><td>{{ '%.4f'|format(i.cost_eur) }} €</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">Rien pour l'instant.</td></tr>{% endfor %}
+  </table>
+</div>
 {% endblock %}

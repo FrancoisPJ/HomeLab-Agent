@@ -1619,6 +1619,20 @@
           "title": "Password Env",
           "type": "string"
         },
+        "grafana_url": {
+          "anyOf": [
+            {
+              "pattern": "^https?://[^\\s\\\"'<>]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Link to Grafana in the panel navigation, e.g. http://127.0.0.1:3000",
+          "title": "Grafana Url"
+        },
         "metrics_token_env": {
           "anyOf": [
             {

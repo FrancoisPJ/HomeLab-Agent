@@ -1,25 +1,78 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>homelab-agent · {% block title %}{% endblock %}</title>
+<script>
+  // theme before first paint: auto (system) | light | dark, remembered per browser
+  try { const t = localStorage.getItem("hla-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  // real refraction (SVG filter in backdrop-filter) only where it renders correctly: Chromium
+  if (navigator.userAgentData && CSS.supports("backdrop-filter", "url(#liquid) blur(1px)")) document.documentElement.classList.add("liquid");
+</script>
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/htmx.min.js" defer></script>
+<script src="/static/ui.js" defer></script>
 </head>
 <body>
-<header>
-  <strong>🏠 homelab-agent</strong>
-  {% set p = request.url.path %}
-  <a href="/" class="{{ 'on' if p == '/' }}">État</a>
-  <a href="/chat" class="{{ 'on' if p == '/chat' }}">Chat</a>
-  <a href="/permissions" class="{{ 'on' if p.startswith('/permissions') }}">Permissions</a>
-  <a href="/proactive" class="{{ 'on' if p == '/proactive' }}">Proactif</a>
-  <a href="/budget" class="{{ 'on' if p == '/budget' }}">Budget</a>
-  <a href="/jobs" class="{{ 'on' if p == '/jobs' }}">Tâches</a>
-  <a href="/audit" class="{{ 'on' if p == '/audit' }}">Audit</a>
-  <a href="/config" class="{{ 'on' if p == '/config' }}">Configuration</a>
-  <form method="post" action="/logout"><button class="ghost">Déconnexion</button></form>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- liquid refraction: low-frequency noise bends what is behind the pane -->
+    <filter id="liquid" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.022" numOctaves="2" seed="11" result="noise"/>
+      <feGaussianBlur in="noise" stdDeviation="2" result="soft"/>
+      <feDisplacementMap in="SourceGraphic" in2="soft" scale="34" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H10l-5 4v-4H4z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 6v6c0 4.8-3.4 7.9-8 9-4.6-1.1-8-4.2-8-9V6z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5 12.9 8.6 18 10.5l-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3.5"/><path d="M3 9.5h18"/><path d="M16 14h2"/></symbol>
+    <symbol id="i-tasks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20"/><path d="m3.8 6.5 1.2 1.2 2.2-2.4M3.8 12l1.2 1.2 2.2-2.4"/><circle cx="5.3" cy="17.5" r="1.1"/></symbol>
+    <symbol id="i-audit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h8l4 4v13H7z"/><path d="M15 3.5v4h4"/><path d="M10 12h6M10 15.5h6"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M5 16l4.5-5 3.5 3 6-7"/><path d="M15 7h4v4"/></symbol>
+    <symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4H19v16h-4.5"/><path d="m10 8-4 4 4 4"/><path d="M6 12h10"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></symbol>
+  </defs>
+</svg>
+
+{% set p = request.url.path %}
+<header class="topbar">
+  <nav class="nav" aria-label="Navigation">
+    <a class="brand" href="/" aria-label="homelab-agent"><span class="orb"></span><span>homelab-agent</span></a>
+    {% for href, icon, label, active, minor in [
+        ("/", "home", "État", p == "/", false),
+        ("/chat", "chat", "Chat", p == "/chat", false),
+        ("/permissions", "shield", "Permissions", p.startswith("/permissions"), false),
+        ("/proactive", "spark", "Proactif", p == "/proactive", false),
+        ("/budget", "wallet", "Budget", p == "/budget", false),
+        ("/jobs", "tasks", "Tâches", p == "/jobs", false),
+        ("/audit", "audit", "Audit", p == "/audit", true),
+        ("/config", "sliders", "Config", p == "/config", true),
+    ] %}
+    <a class="link{{ ' on' if active }}{{ ' minor' if minor and not active }}" href="{{ href }}"{% if active %} aria-current="page"{% endif %} title="{{ label }}"><svg><use href="#i-{{ icon }}"/></svg><span>{{ label }}</span></a>
+    {% endfor %}
+    {% if cfg.web.grafana_url %}
+    <a class="link minor" href="{{ cfg.web.grafana_url }}" target="_blank" rel="noopener" title="Grafana"><svg><use href="#i-chart"/></svg><span>Grafana</span></a>
+    {% endif %}
+    <span class="spacer"></span>
+    <button class="iconbtn" id="palette-open" type="button" title="Commandes (Ctrl K)" aria-label="Ouvrir la palette de commandes"><svg><use href="#i-search"/></svg></button>
+    <button class="iconbtn" id="theme" type="button" title="Thème : auto / clair / sombre" aria-label="Changer de thème"><svg><use href="#i-theme"/></svg></button>
+    <form method="post" action="/logout"><button class="iconbtn" title="Déconnexion" aria-label="Déconnexion"><svg><use href="#i-logout"/></svg></button></form>
+  </nav>
 </header>
+
 <main>{% block content %}{% endblock %}</main>
+
+<dialog id="palette" class="palette" aria-label="Palette de commandes">
+  <div class="palette-field"><svg><use href="#i-search"/></svg><input type="text" placeholder="Aller à… ou demander à l'agent" autocomplete="off" aria-label="Rechercher"></div>
+  <ul role="listbox"></ul>
+  <p class="palette-hint"><kbd>↑</kbd><kbd>↓</kbd> choisir · <kbd>Entrée</kbd> valider · <kbd>Échap</kbd> fermer</p>
+</dialog>
 </body>
 </html>

@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Proactif{% endblock %}
 {% block content %}
-<h1>Domotique proactive</h1>
+<div class="hero"><div><h1>Domotique proactive</h1></div></div>
 <div class="card"><p>
 alertes {% if cfg.proactive.alerts_active %}<span class="ok">● actives</span>{% else %}<span class="muted">● désactivées</span>{% endif %}
 · routines {% if cfg.proactive.routines_active %}<span class="ok">● actives</span>{% else %}<span class="muted">● désactivées</span>{% endif %}

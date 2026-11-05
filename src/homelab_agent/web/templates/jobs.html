@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Tâches{% endblock %}
 {% block content %}
-<h1>Tâches CPU</h1>
+<div class="hero"><div><h1>Tâches CPU</h1></div></div>
 <div class="card" hx-get="/jobs" hx-trigger="every 10s" hx-select=".card" hx-swap="outerHTML">
 <table><tr><th>#</th><th>Statut</th><th>Demande</th><th>Essais</th><th>Créée (UTC)</th><th>Résultat / erreur</th></tr>
 {% for j in jobs %}<tr><td>{{ j.id }}</td><td>{{ j.status }}</td><td>{{ j.prompt[:120] }}</td><td>{{ j.attempts }}</td>

@@ -91,6 +91,9 @@ en HTTP, le token transite en clair sur le réseau local.
 ### `web`
 `enabled`, `bind` (127.0.0.1), `port`, `password_env`. Dans Docker, le conteneur écoute sur
 `0.0.0.0` (variable `HLA_WEB_BIND`) mais le port n'est publié que sur `127.0.0.1` de l'hôte.
+`metrics_token_env` (`METRICS_TOKEN` par défaut, `null` pour désactiver) nomme la variable du jeton
+qui ouvre **uniquement** `GET /metrics` à Prometheus ; `grafana_url` (URL `http://` ou `https://`)
+ajoute un lien « Grafana » à la barre du panneau. Voir [monitoring.md](monitoring.md).
 
 ### `memory`
 Mémoire longue : `enabled`, `max_items`, `context_max_chars`. Voir [telegram.md](telegram.md#mémoire-longue).

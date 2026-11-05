@@ -237,6 +237,23 @@ class Database:
         async with self.session() as s, s.begin():
             s.add(Interaction(**fields))
 
+    async def interactions_since(self, since: datetime, limit: int = 20_000) -> list[Interaction]:
+        async with self.session() as s:
+            q = (
+                select(Interaction)
+                .where(Interaction.created_at >= since.astimezone(UTC).replace(tzinfo=None))
+                .order_by(Interaction.id)
+                .limit(limit)
+            )
+            return list((await s.execute(q)).scalars())
+
+    async def spend_rows_since(self, since: datetime) -> list[tuple[datetime, float]]:
+        async with self.session() as s:
+            q = select(Spend.created_at, Spend.cost_eur).where(
+                Spend.created_at >= since.astimezone(UTC).replace(tzinfo=None)
+            )
+            return [(t, float(c)) for t, c in (await s.execute(q)).all()]
+
     async def recent_interactions(self, limit: int = 50) -> list[Interaction]:
         async with self.session() as s:
             q = select(Interaction).order_by(Interaction.id.desc()).limit(limit)

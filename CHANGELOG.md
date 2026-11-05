@@ -5,6 +5,30 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## [Non publié]
 
+### Ajouté
+- **Supervision Prometheus + Grafana** : profil Compose `monitoring`, tableau de bord de 19
+  panneaux provisionné automatiquement (niveaux, latences p50/p95, disponibilité des moteurs,
+  outils, alertes, budget, voix), généré par `scripts/grafana_dashboard.py` et vérifié en CI ;
+  `make dev-monitoring` pour la démo. Voir [docs/monitoring.md](docs/monitoring.md).
+- `/metrics` complet : histogrammes de latence, jauges (moteurs, Home Assistant, tâches, budget),
+  `HELP` / `TYPE` ; jeton de collecte `METRICS_TOKEN` limité à `GET /metrics`.
+- **Panneau « liquid glass »** : surfaces en verre dépoli sur fond d'aurore animée, reflet qui suit
+  le pointeur, réfraction réelle de la barre de navigation (navigateurs Chromium), bulle d'onglet qui
+  glisse d'une page à l'autre (transitions de vue), thèmes auto / clair / sombre, respect de
+  « réduire les animations » et « réduire la transparence ».
+- Page d'accueil : 24 dernières heures en un coup d'œil (messages, latence p95, dépense, avec
+  courbes), « Qui répond ? » (anneau par niveau), maison en direct (lumières, température, serrures,
+  alertes en cours), jauge de budget.
+- **Palette de commandes** (Ctrl K / ⌘ K, ou 🔍) : aller à une page, changer de thème, ou
+  pré-remplir le chat (jamais envoyé sans Entrée). Sur téléphone, barre d'onglets en bas et
+  pages secondaires dans la palette.
+- `web.grafana_url` : lien Grafana dans la barre du panneau.
+
+### Modifié
+- `make init` génère `PANEL_PASSWORD`, `METRICS_TOKEN` et `GRAFANA_ADMIN_PASSWORD` au hasard dans le
+  nouveau `.env` (jamais les valeurs déjà saisies) et le passe en `chmod 600`.
+- CI : vérifie aussi le JSON Grafana et le fichier Compose avec tous les profils.
+
 ## [0.4.0] - 2026-11-05
 
 ### Ajouté
