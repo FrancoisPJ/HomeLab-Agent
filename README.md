@@ -15,6 +15,7 @@ Chaque demande est envoyée au moteur le plus adapté :
 Il pilote **Home Assistant** (lecture et contrôle), avec des **permissions appliquées par le code**
 et réglables dans un **panneau web**. Il peut aussi **prévenir** (fuite, porte ouverte, température)
 avec un bouton d'action, et lancer des **routines** à heure fixe ([docs/proactive.md](docs/proactive.md)).
+Les **messages vocaux** Telegram sont transcrits en local avec whisper.cpp ([docs/voice.md](docs/voice.md)).
 
 > ⚠️ Le projet a été développé et testé **sans accès au matériel réel** : la CI utilise des faux
 > services (LLM, Home Assistant, Telegram). Avant d'en dépendre, déroulez la
@@ -71,7 +72,8 @@ distant : `ssh -L 8099:127.0.0.1:8099 serveur`.
 | `full` | agent, llama-gpu, llama-cpu | serveur avec GPU NVIDIA |
 | `cpu-only` | agent, llama-cpu | pas de GPU : avec `make init PRESET=cpu-only`, un petit modèle CPU sert le niveau rapide |
 | `no-gpu` | agent | moteurs hébergés ailleurs (changez les `url`) ou cloud seul |
-| `dev` | agent + faux LLM, faux Home Assistant, fausse API Telegram | développement, démo, tests e2e |
+| `voice` | whisper (transcription) | à ajouter : `make up PROFILE=full,voice` |
+| `dev` | agent + faux LLM, faux Home Assistant, fausse API Telegram, faux STT | développement, démo, tests e2e |
 
 `make up PROFILE=cpu-only`, `make dev` (rechargement à chaud), `make e2e` (scénario complet).
 
@@ -88,7 +90,8 @@ pour l'autocomplétion) :
   `cloud.pricing`, `cloud.limits` ([docs/cloud-budget.md](docs/cloud-budget.md)) ;
 - **Home Assistant** : politique par défaut, règles, confirmations ([docs/home-assistant.md](docs/home-assistant.md)) ;
 - **Telegram** : liste blanche, rythme du streaming ([docs/telegram.md](docs/telegram.md)) ;
-- **alertes et routines** : section `proactive` ([docs/proactive.md](docs/proactive.md)).
+- **alertes et routines** : section `proactive` ([docs/proactive.md](docs/proactive.md)) ;
+- **voix** : section `voice` et modèle `engine: whisper` ([docs/voice.md](docs/voice.md)).
 
 Référence complète : [docs/configuration.md](docs/configuration.md). Vérification : `make check`.
 

@@ -55,35 +55,38 @@ engines: ## Render llama-swap configs from models: in config.yaml
 models: ## Download the GGUF files listed in config.yaml (checks sha256)
 	CONFIG=$(CONFIG) ./scripts/download-models.sh
 
-build: ## Build the Docker images of the profile
-	$(COMPOSE) --profile $(PROFILE) build
+# PROFILE may list several profiles: make up PROFILE=full,voice
+export COMPOSE_PROFILES = $(PROFILE)
 
-up: init engines ## Start the stack (PROFILE=full|cpu-only|no-gpu)
-	$(COMPOSE) --profile $(PROFILE) up -d --build
+build: ## Build the Docker images of the profile
+	$(COMPOSE) build
+
+up: init engines ## Start the stack (PROFILE=full|cpu-only|no-gpu, add ",voice" for voice notes)
+	$(COMPOSE) up -d --build
 
 down: ## Stop the stack
-	$(COMPOSE) --profile $(PROFILE) down
+	$(COMPOSE) down
 
 restart: engines ## Restart (after a config/model change)
-	$(COMPOSE) --profile $(PROFILE) up -d --force-recreate
+	$(COMPOSE) up -d --force-recreate
 
 logs: ## Follow logs
-	$(COMPOSE) --profile $(PROFILE) logs -f --tail=100
+	$(COMPOSE) logs -f --tail=100
 
 ps: ## Containers status
-	$(COMPOSE) --profile $(PROFILE) ps
+	$(COMPOSE) ps
 
 dev: ## Dev stack with fake services + hot reload
-	$(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile dev up --build
+	COMPOSE_PROFILES=dev $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 dev-down:
-	$(COMPOSE) --profile dev down -v
+	COMPOSE_PROFILES=dev $(COMPOSE) down -v
 
 e2e: ## End-to-end scenario against the dev stack
-	$(COMPOSE) --profile dev up -d --build --wait
+	COMPOSE_PROFILES=dev $(COMPOSE) up -d --build --wait
 	HLA_E2E=1 $(RUN) pytest -m e2e tests/e2e -v; status=$$?; \
-	  $(COMPOSE) --profile dev logs agent-dev | tail -50; \
-	  $(COMPOSE) --profile dev down -v; exit $$status
+	  COMPOSE_PROFILES=dev $(COMPOSE) logs agent-dev | tail -50; \
+	  COMPOSE_PROFILES=dev $(COMPOSE) down -v; exit $$status
 
 bench: ## Benchmark an endpoint: make bench URL=http://localhost:18080/v1 MODEL=fast
 	$(RUN) python scripts/bench.py --url $(or $(URL),http://127.0.0.1:18080/v1) --model $(or $(MODEL),fast)

@@ -30,6 +30,7 @@ from homelab_agent.tools.homeassistant.client import HomeAssistantClient
 from homelab_agent.tools.homeassistant.permissions import PermissionEngine
 from homelab_agent.tools.homeassistant.tools import HomeAssistantService, register_ha_tools
 from homelab_agent.tools.registry import ToolRegistry, escalate_tool
+from homelab_agent.voice.stt import SpeechToText
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class Services:
     notifier: Notifier = field(default_factory=LogNotifier)
     alerts: AlertEngine | None = None
     routines: RoutineScheduler | None = None
+    stt: SpeechToText | None = None
     started: bool = False
 
     @property
@@ -89,6 +91,9 @@ class Services:
             f"\nCloud {state} · aujourd'hui {day:.2f} € / {lim.daily_eur:.2f} € · "
             f"mois {month:.2f} € / {lim.monthly_eur:.2f} €"
         )
+        if self.stt is not None and self.cfg.voice.enabled:
+            ok = await self.stt.health()
+            lines.append(f"{'🟢' if ok else '🔴'} Voix (transcription)")
         if self.jobs is not None:
             active = await self.db.list_jobs(active_only=True)
             lines.append(f"Tâches CPU actives : {len(active)}")
@@ -228,6 +233,8 @@ async def start_jobs(services: Services) -> None:
 
 
 async def close_services(services: Services) -> None:
+    if services.stt:
+        await services.stt.aclose()
     if services.routines:
         await services.routines.stop()
     if services.alerts:
@@ -259,6 +266,10 @@ async def run(config_path: str) -> None:
         from homelab_agent.gateway.aiogram_adapter import TelegramGateway
 
         gateway = TelegramGateway(token, cfg.telegram.api_base)
+        if cfg.voice.enabled:
+            stt_key = AppConfig.secret(cfg.voice.api_key_env)
+            MASKER.add(stt_key)
+            services.stt = SpeechToText(cfg.voice, stt_key)
         frontend = TelegramFrontend(
             gateway.api,
             lambda: store.config.telegram,
@@ -272,6 +283,8 @@ async def run(config_path: str) -> None:
                 "run": ("lancer une routine maintenant", services.run_routine),
                 "alerts": ("alertes et derniers déclenchements", services.alerts_text),
             },
+            voice=lambda: store.config.voice,
+            stt=services.stt,
         )
         gateway.attach(frontend)
         services.notifier = frontend

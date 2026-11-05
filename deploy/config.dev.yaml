@@ -29,6 +29,9 @@ home_assistant:
   token_env: HA_TOKEN
   confirm: [{ domain: lock }]
 web: { enabled: true, port: 8099, password_env: PANEL_PASSWORD }
+voice:
+  enabled: true
+  stt_url: http://fake-stt:8080/v1/audio/transcriptions
 proactive:
   enabled: true
   alerts:

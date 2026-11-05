@@ -23,6 +23,7 @@ class FakeBot:
     def __init__(self) -> None:
         self.ops: list[tuple[str, Any]] = []
         self.next_id = 100
+        self.files: dict[str, bytes] = {}
 
     async def send_message(
         self, chat_id: str, text: str, buttons: list[Button] | None = None
@@ -38,6 +39,10 @@ class FakeBot:
 
     async def answer_callback(self, callback_id: str, text: str = "") -> None:
         self.ops.append(("answer", (callback_id, text)))
+
+    async def download_file(self, file_id: str) -> bytes:
+        self.ops.append(("download", file_id))
+        return self.files[file_id]
 
     def texts(self) -> list[str]:
         return [

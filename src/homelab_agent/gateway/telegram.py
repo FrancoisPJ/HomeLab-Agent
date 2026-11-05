@@ -13,9 +13,10 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
-from homelab_agent.config.models import TelegramSection, Tier
+from homelab_agent.config.models import TelegramSection, Tier, VoiceSection
 from homelab_agent.gateway.base import ActionButton, IncomingMessage, Replier, StreamHandle
 from homelab_agent.observability.metrics import METRICS
+from homelab_agent.voice.stt import SpeechToText, STTError
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ class BotApi(Protocol):
     ) -> None: ...
 
     async def answer_callback(self, callback_id: str, text: str = "") -> None: ...
+
+    async def download_file(self, file_id: str) -> bytes: ...
 
 
 def split_text(text: str, limit: int) -> list[str]:
@@ -153,6 +156,8 @@ class TelegramFrontend:
         jobs_text: ChatAction,
         reset_chat: ChatAction,
         commands: dict[str, ChatCommand] | None = None,
+        voice: Callable[[], VoiceSection] | None = None,
+        stt: SpeechToText | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.api = api
@@ -164,6 +169,8 @@ class TelegramFrontend:
         self.reset_chat = reset_chat
         self.clock = clock
         self.commands = commands or {}
+        self.voice = voice
+        self.stt = stt
         self._pending: dict[str, tuple[str, asyncio.Future[bool]]] = {}
         self._actions: dict[str, tuple[str, ActionButton, float]] = {}
 
@@ -240,6 +247,49 @@ class TelegramFrontend:
                 await replier.send("Commande inconnue. /help pour la liste.")
             return
         await self._run(IncomingMessage(str(user_id), chat, text), replier)
+
+    async def on_voice(
+        self,
+        user_id: int | str,
+        chat_id: int | str,
+        file_id: str,
+        duration_s: int,
+        mime: str = "audio/ogg",
+    ) -> None:
+        """Voice note: transcribe locally, show what was understood, then handle as text."""
+        if not self.is_allowed(user_id):
+            METRICS.inc("telegram_rejected_total")
+            log.warning("ignored voice message from non-allowlisted user %s", user_id)
+            return
+        replier = TelegramReplier(self, str(chat_id))
+        section = self.voice() if self.voice else None
+        if section is None or not section.enabled or self.stt is None:
+            await replier.send("🎤 Les messages vocaux ne sont pas activés (voice.enabled).")
+            return
+        if duration_s > section.max_duration_s:
+            await replier.send(
+                f"🎤 Message trop long ({duration_s} s, maximum {section.max_duration_s} s)."
+            )
+            return
+        METRICS.inc("voice_messages_total")
+        try:
+            audio = await self.api.download_file(file_id)
+            text = await self.stt.transcribe(audio, "voice.ogg", mime)
+        except STTError as exc:
+            log.warning("transcription failed: %s", exc)
+            await replier.send("❌ Transcription impossible (moteur vocal indisponible).")
+            return
+        except Exception:
+            log.exception("voice message failed")
+            await replier.send("❌ Impossible de récupérer le message vocal.")
+            return
+        text = text.strip().lstrip("/")
+        if not text:
+            await replier.send("🎤 Je n'ai rien compris.")
+            return
+        if section.echo_transcript:
+            await replier.send(f"🎤 « {text} »")
+        await self._run(IncomingMessage(str(user_id), str(chat_id), text), replier)
 
     async def _run(self, msg: IncomingMessage, replier: Replier) -> None:
         try:

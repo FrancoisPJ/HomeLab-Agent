@@ -249,7 +249,9 @@ class ModelItem(_Base):
     """A GGUF model served by llama.cpp. Rendered into llama-swap configs."""
 
     name: str = Field(description="Name used by backends (`model:` field) and llama-swap.")
-    engine: Literal["gpu", "cpu"]
+    engine: Literal["gpu", "cpu", "whisper"] = Field(
+        description="gpu / cpu: llama.cpp engines; whisper: speech-to-text model (voice)."
+    )
     repo: str = Field(description="Hugging Face repository, e.g. Qwen/Qwen3-4B-GGUF")
     file: str = Field(description="GGUF file in the repository.")
     sha256: str | None = None
@@ -289,10 +291,30 @@ class ModelsSection(_Base):
     items: list[ModelItem] = Field(default_factory=list)
     gpu: EngineSettings = Field(default_factory=EngineSettings)
     cpu: EngineSettings = Field(default_factory=EngineSettings)
+    whisper_threads: int = Field(4, ge=1, description="Threads of the speech-to-text engine.")
 
 
 class StoreSection(_Base):
     path: str = "./data/agent.db"
+
+
+# --------------------------------------------------------------------------- voice
+class VoiceSection(_Base):
+    """Telegram voice notes, transcribed locally (whisper.cpp) then handled as text."""
+
+    enabled: bool = False
+    stt_url: str = Field(
+        "http://whisper:8080/v1/audio/transcriptions",
+        description="OpenAI-style transcription endpoint (whisper.cpp server, speaches...).",
+    )
+    stt_model: str = Field(
+        "whisper-1", description="Sent as the `model` field (some servers need it)."
+    )
+    api_key_env: str | None = None
+    language: str = "fr"
+    timeout_s: float = Field(120, gt=0)
+    max_duration_s: int = Field(120, ge=1, description="Longer voice notes are refused.")
+    echo_transcript: bool = Field(True, description="Reply with what was understood first.")
 
 
 # ----------------------------------------------------------------------- proactive
@@ -408,6 +430,7 @@ class AppConfig(_Base):
     home_assistant: HomeAssistantSection = Field(default_factory=HomeAssistantSection)
     web: WebSection = Field(default_factory=WebSection)
     proactive: ProactiveSection = Field(default_factory=ProactiveSection)
+    voice: VoiceSection = Field(default_factory=VoiceSection)
     models: ModelsSection = Field(default_factory=ModelsSection)
     store: StoreSection = Field(default_factory=StoreSection)
 
@@ -439,6 +462,8 @@ class AppConfig(_Base):
         dupes = {n for n in names if names.count(n) > 1}
         if dupes:
             raise ValueError(f"duplicate model names in models.items: {sorted(dupes)}")
+        if len([m for m in self.models.items if m.engine == "whisper"]) > 1:
+            raise ValueError("only one models.items entry may use engine 'whisper'")
         return self
 
     # -- helpers -----------------------------------------------------------

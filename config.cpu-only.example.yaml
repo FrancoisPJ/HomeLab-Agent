@@ -168,6 +168,17 @@ proactive:
   #    tier: gpu
 
 # -----------------------------------------------------------------------------
+#  Messages vocaux Telegram, transcrits en local (whisper.cpp). Voir docs/voice.md.
+#  Activer : enabled: true, puis  make engines models  et  make up PROFILE=full,voice
+# -----------------------------------------------------------------------------
+voice:
+  enabled: false
+  stt_url: http://whisper:8080/v1/audio/transcriptions
+  language: fr
+  max_duration_s: 120           # vocaux plus longs refusés
+  echo_transcript: true         # répond d'abord 🎤 « ce que j'ai compris »
+
+# -----------------------------------------------------------------------------
 #  Modèles GGUF servis par llama.cpp (via llama-swap). C'est ICI qu'on choisit
 #  les modèles. Après modification :  make engines models  puis  make restart.
 #  Candidats et méthode de choix : docs/models.md. À valider avec scripts/bench.py.
@@ -195,6 +206,12 @@ models:
       ctx_size: 8192
       threads: 8
       ttl_s: 1800
+    - name: stt                 # transcription vocale (téléchargé seulement si voice.enabled)
+      engine: whisper
+      repo: ggerganov/whisper.cpp
+      file: ggml-small.bin
+      sha256: 1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
+      threads: 4
 
 store:
   path: ./data/agent.db

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import time
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 
 
 class FakeTelegram:
@@ -22,6 +23,7 @@ class FakeTelegram:
         self.sent: list[dict[str, Any]] = []  # every sendMessage / edit, in order
         self.messages: dict[int, dict[str, Any]] = {}
         self.callback_answers: list[dict[str, Any]] = []
+        self.files: dict[str, bytes] = {}
         self.event = asyncio.Event()
 
     def _user(self, uid: int) -> dict[str, Any]:
@@ -43,6 +45,28 @@ class FakeTelegram:
                     "chat": {"id": chat_id, "type": "private"},
                     "from": self._user(user_id),
                     "text": text,
+                }
+            }
+        )
+
+    def inject_voice(self, user_id: int, chat_id: int, audio: bytes, duration: int) -> None:
+        self.message_id += 1
+        file_id = f"voice{self.message_id}"
+        self.files[file_id] = audio
+        self.push(
+            {
+                "message": {
+                    "message_id": self.message_id,
+                    "date": int(time.time()),
+                    "chat": {"id": chat_id, "type": "private"},
+                    "from": self._user(user_id),
+                    "voice": {
+                        "file_id": file_id,
+                        "file_unique_id": file_id,
+                        "duration": duration,
+                        "mime_type": "audio/ogg",
+                        "file_size": len(audio),
+                    },
                 }
             }
         )
@@ -149,6 +173,21 @@ def create_app() -> FastAPI:
             )
             tg.sent.append({"op": "edit", **msg})
             return {"ok": True, "result": msg}
+        if m == "getfile":
+            fid = str(p["file_id"])
+            if fid not in tg.files:
+                return {
+                    "ok": False,
+                    "error_code": 400,
+                    "description": "Bad Request: invalid file_id",
+                }
+            info = {
+                "file_id": fid,
+                "file_unique_id": fid,
+                "file_size": len(tg.files[fid]),
+                "file_path": f"voice/{fid}.oga",
+            }
+            return {"ok": True, "result": info}
         if m == "answercallbackquery":
             tg.callback_answers.append(p)
             return {"ok": True, "result": True}
@@ -164,6 +203,21 @@ def create_app() -> FastAPI:
         tg.inject_message(
             int(body["user_id"]), int(body.get("chat_id", body["user_id"])), body["text"]
         )
+        return {"ok": True}
+
+    @app.get("/file/bot{token}/voice/{name}")
+    async def file_download(token: str, name: str) -> Response:
+        fid = name.rsplit(".", 1)[0]
+        if fid not in tg.files:
+            return Response(status_code=404)
+        return Response(tg.files[fid], media_type="audio/ogg")
+
+    @app.post("/_test/voice")
+    async def inject_voice(request: Request) -> dict[str, bool]:
+        body = await request.json()
+        uid = int(body["user_id"])
+        audio = body["text"].encode() if "text" in body else base64.b64decode(body["audio_b64"])
+        tg.inject_voice(uid, int(body.get("chat_id", uid)), audio, int(body.get("duration", 3)))
         return {"ok": True}
 
     @app.post("/_test/callback")

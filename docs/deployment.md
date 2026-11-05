@@ -70,5 +70,7 @@ par vous :
 - [ ] **Allowlist** : un autre compte Telegram n'obtient aucune réponse.
 - [ ] **Plafond cloud** : avec une clé API, `cloud.enabled: true`, `daily_eur: 0.01` : après une ou
       deux requêtes `/cloud`, alerte puis repli local.
+- [ ] **Voix** (`make up PROFILE=full,voice`) : un vocal « éteins le salon » est transcrit
+      correctement et exécuté ; noter le temps de transcription.
 - [ ] Le panneau n'est pas joignable depuis une autre machine du réseau (seulement via `127.0.0.1` /
       tunnel SSH).

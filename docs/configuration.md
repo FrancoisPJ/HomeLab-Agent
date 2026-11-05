@@ -86,6 +86,10 @@ size exceeded » — la demande passe au moteur suivant (niveau voisin), sans ma
 `enabled`, `bind` (127.0.0.1), `port`, `password_env`. Dans Docker, le conteneur écoute sur
 `0.0.0.0` (variable `HLA_WEB_BIND`) mais le port n'est publié que sur `127.0.0.1` de l'hôte.
 
+### `voice`
+Messages vocaux Telegram : `enabled`, `stt_url`, `language`, `max_duration_s`, `echo_transcript`,
+`timeout_s`, `stt_model`, `api_key_env`. Voir [voice.md](voice.md).
+
 ### `proactive`
 Alertes sur événements Home Assistant et routines planifiées. Voir [proactive.md](proactive.md).
 
@@ -95,7 +99,7 @@ Les GGUF servis par llama.cpp. Voir [models.md](models.md).
 | Clé | Rôle |
 |---|---|
 | `name` | nom utilisé par les backends et llama-swap |
-| `engine` | `gpu` ou `cpu` |
+| `engine` | `gpu`, `cpu` ou `whisper` (modèle de transcription vocale, un seul) |
 | `repo`, `file`, `sha256` | origine Hugging Face et empreinte vérifiée par `make models` |
 | `ctx_size`, `parallel` | contexte et requêtes simultanées |
 | `n_gpu_layers` | couches sur le GPU (99 = toutes) |

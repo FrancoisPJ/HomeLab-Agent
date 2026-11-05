@@ -64,6 +64,12 @@ class AiogramBotApi:
             if "not modified" not in str(exc):
                 raise
 
+    async def download_file(self, file_id: str) -> bytes:
+        buf = await self.bot.download(file_id)
+        if buf is None:
+            raise RuntimeError("empty download")
+        return buf.read()
+
     async def answer_callback(self, callback_id: str, text: str = "") -> None:
         with contextlib.suppress(TelegramBadRequest):
             await self.bot.answer_callback_query(callback_id, text=text or None)
@@ -88,7 +94,16 @@ class TelegramGateway(Gateway):
 
         @self.dp.message()
         async def on_message(message: TgMessage) -> None:
-            if message.from_user is None or message.text is None:
+            if message.from_user is None:
+                return
+            if message.voice is not None:
+                v = message.voice
+                await front.on_voice(
+                    message.from_user.id, message.chat.id, v.file_id, int(v.duration or 0),
+                    v.mime_type or "audio/ogg",
+                )  # fmt: skip
+                return
+            if message.text is None:
                 return
             await front.on_message(message.from_user.id, message.chat.id, message.text)
 

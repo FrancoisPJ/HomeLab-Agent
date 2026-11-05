@@ -82,6 +82,8 @@ jobs:
             file: docker/llama-cpu.Dockerfile
           - name: llama-gpu
             file: docker/llama-gpu.Dockerfile
+          - name: whisper
+            file: docker/whisper.Dockerfile
     steps:
       - uses: actions/checkout@v5
       - name: Free disk space (CUDA image)

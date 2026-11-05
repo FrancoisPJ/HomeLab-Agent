@@ -179,3 +179,15 @@ def test_10_routines_commands() -> None:
         c.post(f"{HA}/_test/state", json={"entity_id": "light.salon", "state": "on"})
     since = send("/run soir")
     wait_text(lambda t: t.startswith("🔎 soir") and "Lumière salon" in t, since)
+
+
+def test_11_voice_note_drives_the_house() -> None:
+    n = len(ha_calls())
+    with client() as c:
+        since = len(c.get(f"{TG}/_test/sent").json())
+        c.post(
+            f"{TG}/_test/voice", json={"user_id": USER, "text": "Éteins le salon"}
+        ).raise_for_status()
+    wait_text(lambda t: t == "🎤 « Éteins le salon »", since)
+    wait_text(lambda t: t.startswith("✅ light.turn_off"), since)
+    assert ha_calls()[n:][0]["service"] == "turn_off"

@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     p_eng.add_argument("-o", "--output", default="engines", help="output directory")
     sub.add_parser("models", help="list models to download (TSV: repo, file, sha256)")
     p_fake = sub.add_parser("fake", help="run a fake service (tests / dev)")
-    p_fake.add_argument("service", choices=["llm", "ha", "telegram"])
+    p_fake.add_argument("service", choices=["llm", "ha", "telegram", "stt"])
     p_fake.add_argument("--port", type=int, default=8080)
     args = parser.parse_args(argv)
 

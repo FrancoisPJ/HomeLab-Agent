@@ -628,9 +628,11 @@
           "type": "string"
         },
         "engine": {
+          "description": "gpu / cpu: llama.cpp engines; whisper: speech-to-text model (voice).",
           "enum": [
             "gpu",
-            "cpu"
+            "cpu",
+            "whisper"
           ],
           "title": "Engine",
           "type": "string"
@@ -770,6 +772,13 @@
         },
         "cpu": {
           "$ref": "#/$defs/EngineSettings"
+        },
+        "whisper_threads": {
+          "default": 4,
+          "description": "Threads of the speech-to-text engine.",
+          "minimum": 1,
+          "title": "Whisper Threads",
+          "type": "integer"
         }
       },
       "title": "ModelsSection",
@@ -1289,6 +1298,67 @@
       "title": "Tier",
       "type": "string"
     },
+    "VoiceSection": {
+      "additionalProperties": false,
+      "description": "Telegram voice notes, transcribed locally (whisper.cpp) then handled as text.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stt_url": {
+          "default": "http://whisper:8080/v1/audio/transcriptions",
+          "description": "OpenAI-style transcription endpoint (whisper.cpp server, speaches...).",
+          "title": "Stt Url",
+          "type": "string"
+        },
+        "stt_model": {
+          "default": "whisper-1",
+          "description": "Sent as the `model` field (some servers need it).",
+          "title": "Stt Model",
+          "type": "string"
+        },
+        "api_key_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Api Key Env"
+        },
+        "language": {
+          "default": "fr",
+          "title": "Language",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 120,
+          "exclusiveMinimum": 0,
+          "title": "Timeout S",
+          "type": "number"
+        },
+        "max_duration_s": {
+          "default": 120,
+          "description": "Longer voice notes are refused.",
+          "minimum": 1,
+          "title": "Max Duration S",
+          "type": "integer"
+        },
+        "echo_transcript": {
+          "default": true,
+          "description": "Reply with what was understood first.",
+          "title": "Echo Transcript",
+          "type": "boolean"
+        }
+      },
+      "title": "VoiceSection",
+      "type": "object"
+    },
     "WebSection": {
       "additionalProperties": false,
       "properties": {
@@ -1370,6 +1440,9 @@
     },
     "proactive": {
       "$ref": "#/$defs/ProactiveSection"
+    },
+    "voice": {
+      "$ref": "#/$defs/VoiceSection"
     },
     "models": {
       "$ref": "#/$defs/ModelsSection"

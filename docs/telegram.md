@@ -41,6 +41,11 @@ Les erreurs « réessayer après N s » sont respectées. Les réponses longues 
 Pour une action soumise à confirmation, le bot envoie la question avec deux boutons **✅ Oui /
 ❌ Non**. Sans réponse après `confirm_timeout_s`, c'est un non.
 
+## Messages vocaux
+
+Avec `voice.enabled: true`, un vocal est téléchargé, transcrit en local, affiché
+(« 🎤 « … » ») puis traité comme un message écrit. Voir [voice.md](voice.md).
+
 ## Phase 2
 
 L'interface `Gateway` (`gateway/base.py`) permet d'ajouter WhatsApp ou une entrée vocale sans toucher

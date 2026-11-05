@@ -39,7 +39,8 @@ Telegram ◄─polling─►│ gateway ─► orchestrateur ─► routeur ─�
 | `store/` | SQLite (SQLAlchemy 2 async) : historique, interactions, jobs, dépenses, audit ; migrations simples |
 | `web/` | panneau : état, permissions, budget, jobs, audit, éditeur de config |
 | `engines.py` | génère la configuration llama-swap depuis `models:` |
-| `fakes/` | faux LLM, faux Home Assistant, fausse API Telegram (tests, CI, profil `dev`) |
+| `voice/stt.py` | client de transcription (API `/v1/audio/transcriptions`, servie par whisper.cpp) |
+| `fakes/` | faux LLM, faux Home Assistant, fausse API Telegram, faux STT (tests, CI, profil `dev`) |
 | `observability/` | journaux JSON avec masquage des secrets, métriques Prometheus (`/metrics`) |
 
 ## Le routage, étape par étape
