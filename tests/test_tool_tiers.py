@@ -139,3 +139,22 @@ async def test_house_model_has_no_web(tmp_path: Path) -> None:
 def test_unknown_tier_tag_rejected_by_schema() -> None:
     with pytest.raises(ValueError, match="tools"):
         AppConfig.model_validate({"tools": {"nas": ["web"]}})
+
+
+async def test_past_actions_are_not_replayed_as_tool_calls_to_the_deep_model(
+    tmp_path: Path,
+) -> None:
+    h = await build_harness(tmp_path, routing=ROUTING, web_tools={"enabled": True})
+    r = BufferedReplier()
+    await h.orchestrator.handle(
+        IncomingMessage("111", "111", "éteins la lumière de la cuisine stp, light cuisine"), r
+    )
+    msg = IncomingMessage("111", "111", "x")
+    gpu_tools = h.orchestrator.offered_tools(Tier.GPU, msg)
+    gpu = await h.orchestrator.build_messages("111", Tier.GPU, "x", None, gpu_tools)
+    assert any(m.tool_calls for m in gpu)
+    cpu_tools = h.orchestrator.offered_tools(Tier.CPU, msg)
+    cpu = await h.orchestrator.build_messages("111", Tier.CPU, "x", None, cpu_tools)
+    assert not any(m.tool_calls or m.role == "tool" for m in cpu)
+    assert [m.role for m in cpu] == ["system", "user", "assistant", "user"]
+    await h.close()

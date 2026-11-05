@@ -30,6 +30,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 - Prompt système selon le niveau (consignes maison, ou « aucun accès à la maison » et consignes web).
 
 ### Corrigé
+- **Le bot prétendait avoir agi sans rien faire** (Qwen3-8B) : les actions passées étaient écrites
+  dans l'historique en texte (`[actions effectuées : …]`) et le modèle recopiait ce texte au lieu
+  d'appeler l'outil. Les actions réellement exécutées sont maintenant enregistrées à part (colonne
+  `chat_messages.tool_calls`, migration automatique du schéma v1 → v2) et rejouées au modèle comme de
+  vrais appels d'outil avec leur résultat ; l'ancien suffixe est retiré des anciennes lignes. Une
+  réponse qui annonce une action (« a été réduite », « c'est fait », « j'ai éteint »…) sans aucun
+  appel d'outil dans le tour est relancée une fois (« tu n'as appelé aucun outil… »), puis remplacée
+  par « ⚠️ Je n'ai rien fait… » (métrique `fake_actions_total`).
 - **Services inventés** (`light.dim`, `light.turn_off` avec `brightness_pct`) : refusés avant
   l'appel avec la liste des services et champs possibles (`home_assistant.service_validation`) ; un
   refus HTTP 4xx de Home Assistant renvoie son message avec la même liste.

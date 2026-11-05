@@ -4,8 +4,9 @@ Directives inside the last user message drive its behaviour:
 
 * ``[[tool:NAME {"json": "args"}]]`` → emits that tool call
 * ``[[retry:NAME {"json": "args"}]]`` → emits that call when the orchestrator nudges the
-  model to fix a failed tool call (a message starting with ``[Système]``); without it, the
-  fake gives up again
+  model (a message starting with ``[Système]``); without it, the fake gives up
+* ``[[lie]]`` → claims an action in text without calling any tool (``[[stubborn]]``: again
+  after the nudge)
 * ``[[escalate:cpu]]`` / ``[[escalate:cloud]]`` → calls the ``escalate`` tool
 * ``[[sleep:2.5]]`` → waits before answering
 * ``[[error:503]]`` → answers with that HTTP status
@@ -37,6 +38,10 @@ ERROR_RE = re.compile(r"\[\[error:([0-9]{3})\]\]")
 
 
 NUDGE_PREFIX = "[Système]"
+LIE = (
+    "La lumière du salon a été réduite à 2 %.\n"
+    '[actions effectuées : ha_call_service {"domain": "light", "service": "turn_on"}]'
+)
 
 
 def _tool_markers(text: str, prefix: str = "[[tool:") -> list[tuple[str, str]]:
@@ -102,10 +107,17 @@ def decide(body: dict[str, Any]) -> dict[str, Any]:
         for name, raw in _tool_markers(utext, "[[retry:"):
             if name in tools:
                 out["tool_calls"].append((name, json.loads(raw) if raw else {}))
-        if not out["tool_calls"]:  # gives up again, with the same words
-            last = next((m for m in reversed(messages) if m.get("role") == "tool"), last)
-        else:
+        if out["tool_calls"]:
             return out
+        if "[[stubborn]]" in utext:
+            out["content"] = LIE
+            return out
+        turn = messages[next((i for i, m in enumerate(messages) if m is user), 0) :]
+        results = [m for m in turn if m.get("role") == "tool"]  # tool results of this turn
+        if not results:
+            out["content"] = "D'accord, je n'ai rien changé."
+            return out
+        last = results[-1]  # gives up again, with the same words
     if last.get("role") == "tool":
         try:
             result = json.loads(last.get("content") or "{}")
@@ -115,6 +127,9 @@ def decide(body: dict[str, Any]) -> dict[str, Any]:
             out["content"] = f"C'est fait ({model})."
         else:
             out["content"] = f"Impossible : {result.get('error', 'erreur inconnue')}"
+        return out
+    if "[[lie]]" in utext or "[[stubborn]]" in utext:
+        out["content"] = LIE
         return out
     if (m := ESC_RE.search(utext)) and "escalate" in tools:
         out["tool_calls"].append(("escalate", {"target": m.group(1), "reason": "test"}))

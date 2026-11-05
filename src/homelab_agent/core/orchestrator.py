@@ -7,11 +7,19 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any
 
 from homelab_agent.config.models import AppConfig, Tier
 from homelab_agent.core import fastpath
 from homelab_agent.core.budget import BudgetManager
+from homelab_agent.core.history import (
+    NO_ACTION_NUDGE,
+    NO_ACTION_REPLY,
+    action_record,
+    claims_action,
+    replay,
+    strip_fake_actions,
+)
 from homelab_agent.core.prompts import build_system_prompt
 from homelab_agent.core.router import TIER_LABELS, Router
 from homelab_agent.gateway.base import (
@@ -28,7 +36,6 @@ from homelab_agent.llm.base import (
     ContextOverflow,
     LLMBackend,
     Message,
-    Role,
     StreamDelta,
     StreamDone,
     ToolCall,
@@ -73,14 +80,11 @@ class AgentOutcome:
     escalation: dict[str, str] | None = None
     tool_failures: int = 0
     finished: bool = False
-    actions: list[str] = field(default_factory=list)  # successful action tools, for history
+    #: action tools really executed, stored with the answer and replayed as tool calls
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    tools_ok: int = 0  # successful tool calls of this turn (any tool)
     failed_tools: set[str] = field(default_factory=set)
     last_error: str = ""
-
-    def history_text(self) -> str:
-        if not self.actions:
-            return self.text
-        return f"{self.text}\n[actions effectuées : {'; '.join(self.actions)}]"
 
 
 class _NullStream:
@@ -228,7 +232,7 @@ class Orchestrator:
             return
         await self._account(msg.chat_id, backend, tier, outcome.usage, start, replier)
         if not await self._hand_over(msg, replier, tier, exclude, outcome, depth) and outcome.text:
-            await self.db.add_message(msg.chat_id, "assistant", outcome.history_text())
+            await self.db.add_message(msg.chat_id, "assistant", outcome.text, outcome.actions)
 
     async def _retry(
         self, msg: IncomingMessage, replier: Replier, tier: Tier, exclude: set[str],
@@ -322,16 +326,18 @@ class Orchestrator:
         # the current user message is already stored as the last item
         if history_rows and history_rows[-1].role == "user" and history_rows[-1].content == text:
             history_rows = history_rows[:-1]
+        offered = {t.name for t in tools} if tools is not None else None
+        # one group of messages per stored row: past actions come back as real tool calls
         history = [
-            Message(cast(Role, h.role), h.content)
+            replay(h.id, h.role, h.content, h.tool_calls, offered)
             for h in history_rows[-cfg.agent.history_messages :]
             if h.role in ("user", "assistant")
         ]
         user = Message("user", text)
 
-        def assemble(summary_text: str, hist: list[Message]) -> list[Message]:
+        def assemble(summary_text: str, hist: list[list[Message]]) -> list[Message]:
             system = Message("system", build_system_prompt(cfg, tier, summary_text, memories))
-            return [system, *hist, user]
+            return [system, *(m for group in hist for m in group), user]
 
         if backend is None or backend.max_context is None:
             return assemble(summary, history)
@@ -341,7 +347,13 @@ class Orchestrator:
         budget = backend.max_context - backend.max_output_tokens - tools_cost - 32
 
         def cost(msgs: list[Message]) -> int:
-            return sum(budget_tokens(m.content) + 4 for m in msgs)
+            return sum(
+                budget_tokens(
+                    m.content + "".join(c.name + c.arguments_json() for c in m.tool_calls)
+                )
+                + 4
+                for m in msgs
+            )
 
         messages = assemble(summary, history)
         while cost(messages) > budget and history:
@@ -411,13 +423,17 @@ class Orchestrator:
             result = await self._complete(backend, messages, tools, stream)
             outcome.usage = outcome.usage + result.usage
             if not result.tool_calls:
-                if retry_pending and nudge_left:
+                nudge, text = self._check_reply(outcome, result.content, retry_pending)
+                if nudge is not None and nudge_left:  # one more chance to call the tool
                     nudge_left = retry_pending = False
-                    messages.append(Message("assistant", result.content))
-                    messages.append(Message("user", RETRY_NUDGE))
+                    messages.append(Message("assistant", text))
+                    messages.append(Message("user", nudge))
                     continue
-                return await self._finish(outcome, result.content.strip() or "(réponse vide)",
-                                          stream)  # fmt: skip
+                if nudge == NO_ACTION_NUDGE:  # still claims an action it did not do
+                    log.warning("model claimed an action without calling any tool")
+                    METRICS.inc("fake_actions_total")
+                    text = NO_ACTION_REPLY
+                return await self._finish(outcome, text or "(réponse vide)", stream)
             messages.append(Message("assistant", result.content, tool_calls=result.tool_calls))
             failures = outcome.tool_failures
             if await self._run_tools(result.tool_calls, ctx, messages, outcome, offered):
@@ -433,6 +449,18 @@ class Orchestrator:
         return await self._finish(
             outcome, "⚠️ Limite d'étapes atteinte sans réponse finale.", stream
         )
+
+    @staticmethod
+    def _check_reply(
+        outcome: AgentOutcome, content: str, retry_pending: bool
+    ) -> tuple[str | None, str]:
+        """(nudge to send or None, text without any copied action suffix) of a final reply."""
+        text = strip_fake_actions(content)
+        if outcome.tools_ok == 0 and claims_action(content):
+            return NO_ACTION_NUDGE, text  # claims an action without any tool call
+        if retry_pending:
+            return RETRY_NUDGE, text  # explains the fix of a failed call instead of calling
+        return None, text
 
     @staticmethod
     async def _finish(outcome: AgentOutcome, text: str, stream: StreamHandle) -> AgentOutcome:
@@ -486,8 +514,10 @@ class Orchestrator:
                 outcome.tool_failures += 1
                 outcome.failed_tools.add(call.name)
                 outcome.last_error = r.error or ""
+            if r.ok:
+                outcome.tools_ok += 1
             if r.ok and is_action:
-                outcome.actions.append(f"{call.name} {call.arguments_json()}"[:200])
+                outcome.actions.append(action_record(call.name, call.arguments, r.to_text()))
             messages.append(Message("tool", r.to_text(), tool_call_id=call.id, name=call.name))
         return False
 
@@ -506,5 +536,5 @@ class Orchestrator:
             self.router.health.mark_down(backend.name)
             raise
         await self._account(chat_id, backend, Tier.CPU, outcome.usage, start, replier)
-        await self.db.add_message(chat_id, "assistant", outcome.history_text())
+        await self.db.add_message(chat_id, "assistant", outcome.text, outcome.actions)
         return outcome.text

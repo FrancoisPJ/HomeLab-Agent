@@ -18,6 +18,7 @@ from sqlalchemy import (
     delete,
     func,
     insert,
+    inspect,
     select,
     text,
     update,
@@ -45,6 +46,8 @@ class ChatMessage(Base):
     chat_id: Mapped[str] = mapped_column(String(64), index=True)
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
+    #: actions really executed in this assistant turn: [{name, arguments, result}]
+    tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -130,7 +133,16 @@ class SchemaVersion(Base):
 # Simple forward-only migrations: index i upgrades the schema to version i + 1.
 # Version 1 is the initial ``create_all``; append callables for later changes.
 Migration = Callable[[Any], None]
-MIGRATIONS: list[Migration] = []
+
+
+def _chat_tool_calls(conn: Any) -> None:
+    """v2: actions stored next to the assistant text (replayed as real tool calls)."""
+    columns = {c["name"] for c in inspect(conn).get_columns("chat_messages")}
+    if "tool_calls" not in columns:
+        conn.execute(text("ALTER TABLE chat_messages ADD COLUMN tool_calls JSON"))
+
+
+MIGRATIONS: list[Migration] = [_chat_tool_calls]
 SCHEMA_VERSION = 1 + len(MIGRATIONS)
 
 
@@ -210,9 +222,19 @@ class Database:
         return counts
 
     # ------------------------------------------------------------ history
-    async def add_message(self, chat_id: str, role: str, content: str) -> None:
+    async def add_message(
+        self,
+        chat_id: str,
+        role: str,
+        content: str,
+        tool_calls: list[dict[str, Any]] | None = None,
+    ) -> None:
         async with self.session() as s, s.begin():
-            s.add(ChatMessage(chat_id=chat_id, role=role, content=content))
+            s.add(
+                ChatMessage(
+                    chat_id=chat_id, role=role, content=content, tool_calls=tool_calls or None
+                )
+            )
 
     async def history(self, chat_id: str, limit: int) -> list[ChatMessage]:
         if limit <= 0:
