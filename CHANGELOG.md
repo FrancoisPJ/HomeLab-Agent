@@ -5,6 +5,20 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## [Non publié]
 
+## [0.5.1] - 2026-11-05
+
+### Sécurité
+- Clé de signature du cookie du panneau dérivée du mot de passe par PBKDF2-HMAC-SHA256
+  (200 000 itérations) au lieu d'un simple SHA-256 : les sessions ouvertes sont déconnectées une
+  fois après la mise à jour.
+- `check-config` nomme le réglage concerné (`web.password_env`…) au lieu du nom de la variable.
+- Faux LLM : marqueurs `[[tool:…]]` lus en un seul passage (plus de regex à retour arrière).
+
+### Modifié
+- `Services` déplacé dans `homelab_agent/services.py` (réexporté par `app.py`) : plus d'imports
+  circulaires entre le démarrage, les commandes et le panneau. Alertes CodeQL : 46 → 3 (faux
+  positifs).
+
 ### Corrigé
 - **Chemin rapide trop permissif** : « je veux la lumière de la chambre allumée à 1 % » allumait la
   chambre sans régler la luminosité (le détail était ignoré). Le chemin rapide n'agit plus que si le
@@ -102,7 +116,8 @@ Première version publique.
 - Panneau web (FastAPI + HTMX) : état, permissions, budget, tâches, audit, éditeur de config.
 - Faux services (LLM, Home Assistant, Telegram), tests, scénario e2e, CI/CD.
 
-[Non publié]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.5.0...HEAD
+[Non publié]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.1.0...v0.4.0
 [0.1.0]: https://github.com/FrancoisPJ/HomeLab-Agent/releases/tag/v0.1.0

@@ -2,7 +2,19 @@
 
 Toutes les nouveautés de la version : voir [CHANGELOG.md](https://github.com/FrancoisPJ/HomeLab-Agent/blob/main/CHANGELOG.md).
 
-**En bref (0.5.0)** : photos des caméras dans Telegram (`/camera salon`, ou « montre-moi
+**En bref (0.5.1)** : version corrective de la 0.5.0.
+
+- **Chemin rapide plus strict** : « allume la chambre à 1 % » (ou « en rouge », « dans 10 minutes »)
+  part au modèle au lieu d'allumer sans le détail ; les commandes simples restent instantanées.
+  Trouvé sur le vrai matériel (Proxmox, Telegram).
+- **Sécurité (CodeQL)** : clé du cookie du panneau dérivée par PBKDF2 (reconnexion au panneau une
+  fois après la mise à jour), plus de nom de variable secrète dans `check-config`, plus de regex à
+  retour arrière dans le faux LLM. Alertes CodeQL : 46 → 3 (faux positifs).
+- Imports circulaires supprimés (`Services` dans son propre module), docstrings dans les interfaces.
+
+Mise à jour depuis la 0.5.0 : aucune option nouvelle dans `config.yaml`.
+
+**Rappel 0.5.0** : photos des caméras dans Telegram (`/camera salon`, ou « montre-moi
 l'entrée »), désactivées par défaut et jamais montrées à un modèle ; supervision Prometheus +
 Grafana (profil `monitoring`, tableau de bord fourni) ; panneau web redessiné (« liquid glass »,
 palette de commandes Ctrl K, barre d'onglets sur téléphone) ; mêmes commandes `/…` dans le chat du
