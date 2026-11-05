@@ -23,7 +23,7 @@ from homelab_agent.web.deps import HERE
 from homelab_agent.web.routes import auth, chat, pages, permissions, proactive, status
 
 if TYPE_CHECKING:
-    from homelab_agent.app import Services
+    from homelab_agent.services import Services
 
 __all__ = ["PanelSecretMissing", "create_app", "require_panel_secret"]
 

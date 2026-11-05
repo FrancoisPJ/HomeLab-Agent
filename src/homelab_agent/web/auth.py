@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import hmac
 import secrets
@@ -30,8 +31,15 @@ def require_panel_secret(cfg: AppConfig) -> str:
     return secret
 
 
+KEY_ITERATIONS = 200_000
+
+
+@functools.lru_cache(maxsize=4)
 def _key(password: str) -> bytes:
-    return hashlib.sha256(b"homelab-agent-panel:" + password.encode()).digest()
+    """Cookie signing key, derived from the panel password with a slow KDF (computed once)."""
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), b"homelab-agent-panel-session", KEY_ITERATIONS
+    )
 
 
 def make_session(password: str, now: float | None = None) -> str:

@@ -7,9 +7,9 @@ from typing import Any
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from homelab_agent.app import Services
 from homelab_agent.config.loader import ConfigError
 from homelab_agent.config.models import Policy
+from homelab_agent.services import Services
 from homelab_agent.web.deps import ServicesDep, render
 
 router = APIRouter(prefix="/permissions")

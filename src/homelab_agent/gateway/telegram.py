@@ -36,21 +36,25 @@ def keyboard_rows(buttons: Buttons | None) -> list[list[Button]]:
 
 
 class BotApi(Protocol):
-    async def send_message(
-        self, chat_id: str, text: str, buttons: Buttons | None = None
-    ) -> int: ...
+    async def send_message(self, chat_id: str, text: str, buttons: Buttons | None = None) -> int:
+        """Send a message and return its id."""
 
     async def edit_message_text(
         self, chat_id: str, message_id: int, text: str, buttons: Buttons | None = None
-    ) -> None: ...
+    ) -> None:
+        """Replace the text (and buttons) of a message already sent."""
 
-    async def answer_callback(self, callback_id: str, text: str = "") -> None: ...
+    async def answer_callback(self, callback_id: str, text: str = "") -> None:
+        """Acknowledge a button press."""
 
-    async def download_file(self, file_id: str) -> bytes: ...
+    async def download_file(self, file_id: str) -> bytes:
+        """Download a file sent by the user (voice message)."""
 
-    async def send_voice(self, chat_id: str, audio: bytes) -> None: ...
+    async def send_voice(self, chat_id: str, audio: bytes) -> None:
+        """Send an OGG/Opus voice note."""
 
-    async def send_photo(self, chat_id: str, image: bytes, caption: str = "") -> None: ...
+    async def send_photo(self, chat_id: str, image: bytes, caption: str = "") -> None:
+        """Send an image with a caption."""
 
 
 def split_text(text: str, limit: int) -> list[str]:

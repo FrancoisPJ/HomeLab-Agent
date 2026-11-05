@@ -28,11 +28,14 @@ class StreamHandle(Protocol):
 
 
 class Replier(Protocol):
-    async def send(self, text: str) -> None: ...
+    async def send(self, text: str) -> None:
+        """Send a text message to the conversation."""
 
-    def stream(self) -> StreamHandle: ...
+    def stream(self) -> StreamHandle:
+        """Start a message that is filled in as the answer streams."""
 
-    async def confirm(self, question: str) -> bool: ...
+    async def confirm(self, question: str) -> bool:
+        """Ask a yes/no question; True only if the user says yes in time."""
 
 
 ActionCallback = Callable[[str, "Replier"], Awaitable[str]]
@@ -49,13 +52,16 @@ class ActionButton:
 class Notifier(Protocol):
     """Sends out-of-band messages (finished jobs, budget alerts, home alerts)."""
 
-    async def notify(self, chat_id: str, text: str) -> None: ...
+    async def notify(self, chat_id: str, text: str) -> None:
+        """Send a message to a conversation, outside of any request."""
 
     async def notify_actions(
         self, chat_id: str, text: str, actions: list[ActionButton], ttl_s: float
-    ) -> None: ...
+    ) -> None:
+        """Send a message with one-shot buttons, valid for ttl_s seconds."""
 
-    def replier_for(self, chat_id: str) -> Replier: ...
+    def replier_for(self, chat_id: str) -> Replier:
+        """Replier that answers in the given conversation."""
 
 
 class Gateway(abc.ABC):
@@ -64,24 +70,28 @@ class Gateway(abc.ABC):
     name: str
 
     @abc.abstractmethod
-    async def start(self) -> None: ...
+    async def start(self) -> None:
+        """Start receiving messages."""
 
     @abc.abstractmethod
-    async def stop(self) -> None: ...
+    async def stop(self) -> None:
+        """Stop receiving messages and release resources."""
 
 
 @runtime_checkable
 class ActionReplier(Protocol):
     """A replier that can also show one-shot buttons under a message."""
 
-    async def send_actions(self, text: str, actions: list[ActionButton]) -> None: ...
+    async def send_actions(self, text: str, actions: list[ActionButton]) -> None:
+        """Send a message with one-shot buttons under it."""
 
 
 @runtime_checkable
 class PhotoReplier(Protocol):
     """A replier that can show an image (camera snapshots). Telegram only for now."""
 
-    async def send_photo(self, image: bytes, caption: str) -> None: ...
+    async def send_photo(self, image: bytes, caption: str) -> None:
+        """Send an image with a caption."""
 
 
 class BufferedReplier:

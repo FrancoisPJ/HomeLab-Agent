@@ -89,18 +89,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.cmd == "check-config":
-        missing = [
-            env
-            for env in (
-                cfg.telegram.token_env if cfg.telegram.enabled else None,
-                cfg.home_assistant.token_env if cfg.home_assistant.enabled else None,
-                cfg.web.password_env if cfg.web.enabled else None,
-            )
-            if env and not os.environ.get(env)
-        ]
+        # report the setting that names the variable, never anything read from a secret
+        settings = (
+            ("telegram.token_env", cfg.telegram.enabled, cfg.telegram.token_env),
+            ("home_assistant.token_env", cfg.home_assistant.enabled, cfg.home_assistant.token_env),
+            ("web.password_env", cfg.web.enabled, cfg.web.password_env),
+        )
+        missing = [key for key, on, env in settings if on and env and not os.environ.get(env)]
         print(f"configuration OK: {args.config}")
-        for env in missing:
-            print(f"warning: environment variable {env} is not set")
+        for key in missing:
+            print(f"warning: the environment variable named by {key} is not set")
         return 0
     if args.cmd == "healthcheck":
         return healthcheck(cfg)

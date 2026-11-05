@@ -27,10 +27,31 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-TOOL_RE = re.compile(r"\[\[tool:([a-zA-Z0-9_]+)\s*(\{.*?\})?\]\]", re.S)
+TOOL_NAME_RE = re.compile(r"[a-zA-Z0-9_]+")
 ESC_RE = re.compile(r"\[\[escalate:(cpu|cloud)\]\]")
 SLEEP_RE = re.compile(r"\[\[sleep:([0-9.]+)\]\]")
 ERROR_RE = re.compile(r"\[\[error:([0-9]{3})\]\]")
+
+
+def _tool_markers(text: str) -> list[tuple[str, str]]:
+    """Find ``[[tool:name {json}]]`` markers (JSON optional) in one linear pass."""
+    found: list[tuple[str, str]] = []
+    pos = 0
+    while (start := text.find("[[tool:", pos)) != -1:
+        pos = start + len("[[tool:")
+        name = TOOL_NAME_RE.match(text, pos)
+        if name is None:
+            continue
+        i = name.end()
+        while i < len(text) and text[i].isspace():
+            i += 1
+        if text.startswith("]]", i):
+            found.append((name.group(), ""))
+            pos = i + 2
+        elif text.startswith("{", i) and (end := text.find("}]]", i)) != -1:
+            found.append((name.group(), text[i : end + 1]))
+            pos = end + 3
+    return found
 
 
 def _natural_tool(text: str, system: str) -> tuple[str, dict[str, Any]] | None:
@@ -77,7 +98,7 @@ def decide(body: dict[str, Any]) -> dict[str, Any]:
     if (m := ESC_RE.search(utext)) and "escalate" in tools:
         out["tool_calls"].append(("escalate", {"target": m.group(1), "reason": "test"}))
         return out
-    for name, raw in TOOL_RE.findall(utext):
+    for name, raw in _tool_markers(utext):
         if name in tools:
             out["tool_calls"].append((name, json.loads(raw) if raw else {}))
     if out["tool_calls"]:

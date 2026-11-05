@@ -150,7 +150,8 @@ async def test_rate_limit_per_chat(tmp_path: Path) -> None:
 
 async def test_gateways_without_photos_get_a_text(tmp_path: Path) -> None:
     class TextOnly:
-        async def send(self, text: str) -> None: ...
+        async def send(self, text: str) -> None:
+            """Text only: no send_photo."""
 
         def stream(self) -> StreamHandle:
             raise NotImplementedError

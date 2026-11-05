@@ -64,7 +64,7 @@ def stack_ready() -> None:
                     if status["home_assistant"]:
                         return
         except httpx.HTTPError:
-            pass
+            pass  # the stack is still starting: try again
         time.sleep(1)
     raise AssertionError("dev stack not ready")
 

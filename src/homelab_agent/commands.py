@@ -12,7 +12,7 @@ from homelab_agent.gateway.commands import Command, CommandTable
 from homelab_agent.tools.registry import ToolContext
 
 if TYPE_CHECKING:
-    from homelab_agent.app import Services
+    from homelab_agent.services import Services
 
 RESET_DONE = "🧹 Contexte effacé."
 JOB_ICONS = {"queued": "⏳", "running": "⚙️", "done": "✅", "failed": "❌"}
