@@ -1,11 +1,14 @@
 name: Release
 
-# CD: every push to main publishes `edge` images; a `v*` tag publishes versioned images and
-# a GitHub release. Images go to the GitHub Container Registry of the repository owner.
+# CD: every push to main publishes `edge` images; a `v*` tag (pushed, or created with a release
+# in the GitHub UI) publishes versioned images and a GitHub release.
+# Images go to the GitHub Container Registry of the repository owner.
 on:
   push:
     branches: [main]
     tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -64,7 +67,8 @@ jobs:
 
   github-release:
     name: GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # a release published from the UI already exists: only create one for pushed tags
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [images]
     runs-on: ubuntu-24.04
     steps:
