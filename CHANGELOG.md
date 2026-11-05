@@ -5,6 +5,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## [Non publié]
 
+### Corrigé
+- **Chemin rapide trop permissif** : « je veux la lumière de la chambre allumée à 1 % » allumait la
+  chambre sans régler la luminosité (le détail était ignoré). Le chemin rapide n'agit plus que si le
+  message se réduit au verbe, à l'entité et à des mots de liaison ; sinon le LLM s'en charge.
+
 ## [0.5.0] - 2026-11-05
 
 ### Ajouté
