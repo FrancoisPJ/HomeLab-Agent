@@ -4,7 +4,6 @@
 [![CodeQL](https://github.com/FrancoisPJ/HomeLab-Agent/actions/workflows/codeql.yml/badge.svg)](https://github.com/FrancoisPJ/HomeLab-Agent/actions/workflows/codeql.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](pyproject.toml)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/FrancoisPJ/HomeLab-Agent)
 
 Un agent IA personnel, piloté depuis **Telegram**, qui tourne chez soi avec `docker compose`.
 Chaque demande est envoyée au moteur le plus adapté :
