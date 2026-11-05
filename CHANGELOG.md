@@ -6,6 +6,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 ## [Non publié]
 
 ### Ajouté
+- **Chat dans le panneau web** : deuxième passerelle (même agent, mêmes permissions), réponses en
+  streaming (SSE), confirmations Oui/Non, résultats des tâches CPU reçus plus tard.
 - **Mémoire longue** : « souviens-toi que… », notes annoncées, `/memoire`, `/oublie`, injectées
   comme données ; une routine ne peut pas en écrire.
 - **Télécommande `/maison`** dans Telegram : pièces → appareils avec leur état, un appui bascule,

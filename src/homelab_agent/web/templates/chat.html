@@ -1,0 +1,89 @@
+{% extends "base.html" %}{% block title %}Chat{% endblock %}
+{% block content %}
+<h1>Chat</h1>
+<div class="card chat">
+  <div id="log" class="chat-log" aria-live="polite">
+    <div class="bubble agent">Bonjour ! Même agent que sur Telegram : routage, outils, permissions et confirmations s'appliquent.
+Préfixes : <code>/cloud</code>, <code>/deep</code>.</div>
+  </div>
+  <form id="form" class="chat-form" autocomplete="off">
+    <input id="text" name="text" placeholder="Écris ta demande… (ex. : éteins la lumière du salon)" required>
+    <button>Envoyer</button>
+    <button type="button" class="ghost" id="reset" title="Oublier la conversation">🧹</button>
+  </form>
+</div>
+<script>
+(() => {
+  const log = document.getElementById("log");
+  const form = document.getElementById("form");
+  const input = document.getElementById("text");
+  const seen = new Set();
+  const bubbles = new Map();
+
+  function bubble(cls, text, id) {
+    const el = document.createElement("div");
+    el.className = "bubble " + cls;
+    el.textContent = text;             // never innerHTML: replies are untrusted text
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    if (id !== undefined) bubbles.set(id, el);
+    return el;
+  }
+
+  async function post(url, data) {
+    const body = new URLSearchParams(data || {});
+    const r = await fetch(url, {method: "POST", body, credentials: "same-origin"});
+    return r.json();
+  }
+
+  function handle(ev) {
+    if (ev.type === "message") {
+      if (seen.has(ev.id)) return;
+      seen.add(ev.id);
+      const el = bubble("agent", ev.text, ev.id);
+      for (const a of ev.actions || []) {
+        const b = document.createElement("button");
+        b.className = "ghost"; b.textContent = a.label;
+        b.onclick = async () => { b.disabled = true; const r = await post("/chat/action/" + a.token); bubble("agent", r.text); };
+        el.appendChild(document.createElement("br")); el.appendChild(b);
+      }
+    } else if (ev.type === "update") {
+      const el = bubbles.get(ev.id);
+      if (el) { el.textContent = ev.text; log.scrollTop = log.scrollHeight; }
+    } else if (ev.type === "confirm") {
+      const el = bubble("agent confirm", ev.question);
+      const row = document.createElement("div"); row.className = "inline";
+      for (const [label, yes] of [["✅ Oui", "1"], ["❌ Non", "0"]]) {
+        const b = document.createElement("button");
+        b.textContent = label; if (yes === "0") b.className = "ghost";
+        b.onclick = async () => { row.querySelectorAll("button").forEach(x => x.disabled = true);
+                                  await post("/chat/confirm/" + ev.token, {yes}); };
+        row.appendChild(b);
+      }
+      el.appendChild(row);
+    }
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    bubble("me", text);
+    const r = await post("/chat/send", {text});
+    if (!r.turn) { bubble("agent", r.detail || "Erreur"); return; }
+    const es = new EventSource("/chat/events/" + r.turn);
+    es.onmessage = (m) => { const ev = JSON.parse(m.data); if (ev.type === "done") es.close(); else handle(ev); };
+    es.onerror = () => es.close();
+  });
+
+  document.getElementById("reset").onclick = async () => {
+    const r = await post("/chat/reset"); bubble("agent", r.text);
+  };
+
+  const inbox = new EventSource("/chat/inbox");   // finished CPU jobs, reminders…
+  inbox.onmessage = (m) => handle(JSON.parse(m.data));
+  input.focus();
+})();
+</script>
+{% endblock %}

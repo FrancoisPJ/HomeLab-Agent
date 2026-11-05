@@ -36,6 +36,7 @@ from homelab_agent.tools.homeassistant.permissions import PermissionEngine
 from homelab_agent.tools.homeassistant.tools import HomeAssistantService, register_ha_tools
 from homelab_agent.tools.registry import ToolRegistry, escalate_tool
 from homelab_agent.voice.stt import SpeechToText
+from homelab_agent.web.chat import RoutingNotifier, WebChatHub
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ class Services:
     routines: RoutineScheduler | None = None
     routine_manager: RoutineManager | None = None
     stt: SpeechToText | None = None
+    webchat: WebChatHub = field(default_factory=WebChatHub)
     started: bool = False
 
     @property
@@ -217,6 +219,8 @@ async def build_services(store: ConfigStore, *, start_background: bool = True) -
         register_ha_tools(registry, ha)
     orch = Orchestrator(lambda: store.config, db, router, registry, budget, ha)
     services = Services(store, db, backends, health, budget, router, registry, orch, ha)
+    services.webchat = WebChatHub(lambda: store.config.telegram.confirm_timeout_s)
+    services.notifier = RoutingNotifier(LogNotifier(), services.webchat)
     orch.memory = MemoryService(lambda: store.config, db)
     register_memory_tools(registry, orch.memory)
     services.routines = RoutineScheduler(
@@ -371,7 +375,7 @@ async def run(config_path: str) -> None:
         gateway.attach(frontend)
         if services.ha is not None:
             HomeRemote(frontend, services.ha, lambda: store.config.telegram).attach()
-        services.notifier = frontend
+        services.notifier = RoutingNotifier(frontend, services.webchat)
         if not cfg.telegram.allowed_user_ids:
             log.warning("telegram.allowed_user_ids is empty: every message will be ignored")
 

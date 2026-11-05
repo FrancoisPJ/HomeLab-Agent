@@ -14,6 +14,7 @@ from fastapi.responses import (
     PlainTextResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -24,12 +25,14 @@ from homelab_agent.core.router import TIER_LABELS
 from homelab_agent.core.routines import fr_when
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.web.auth import COOKIE, check_password, check_session, make_session
+from homelab_agent.web.chat import WEB_CHAT, inbox_events, turn_events
 
 if TYPE_CHECKING:
     from homelab_agent.app import Services
 
 HERE = Path(__file__).parent
 SUGGESTED_CONFIRM_DOMAINS = ["lock", "alarm_control_panel", "cover"]
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 LOGIN_MAX_FAILURES = 5
 LOGIN_WINDOW_S = 300
 
@@ -278,6 +281,48 @@ def create_app(services: Services) -> FastAPI:
             current.append({"domain": domain})
         save_ha("confirm", current)
         return RedirectResponse("/permissions", status_code=303)
+
+    # ------------------------------------------------------------------ chat
+    @app.get("/chat", response_class=HTMLResponse)
+    async def chat_page(request: Request) -> HTMLResponse:
+        return render(request, "chat.html")
+
+    @app.post("/chat/send")
+    async def chat_send(text: str = Form("")) -> JSONResponse:
+        if not text.strip():
+            return JSONResponse({"detail": "message vide"}, status_code=400)
+        if len(text) > 4000:
+            return JSONResponse({"detail": "message trop long"}, status_code=400)
+        turn = services.webchat.start_turn(text, services.orchestrator.handle)
+        return JSONResponse({"turn": turn.id})
+
+    @app.get("/chat/events/{turn_id}")
+    async def chat_events(turn_id: str) -> Response:
+        turn = services.webchat.turns.get(turn_id)
+        if turn is None:
+            raise HTTPException(404, "unknown turn")
+        return StreamingResponse(
+            turn_events(turn), media_type="text/event-stream", headers=SSE_HEADERS
+        )
+
+    @app.get("/chat/inbox")
+    async def chat_inbox() -> Response:
+        return StreamingResponse(
+            inbox_events(services.webchat), media_type="text/event-stream", headers=SSE_HEADERS
+        )
+
+    @app.post("/chat/confirm/{token}")
+    async def chat_confirm(token: str, yes: str = Form("0")) -> JSONResponse:
+        return JSONResponse({"ok": services.webchat.answer(token, yes == "1")})
+
+    @app.post("/chat/action/{token}")
+    async def chat_action(token: str) -> JSONResponse:
+        return JSONResponse({"text": await services.webchat.run_action(token)})
+
+    @app.post("/chat/reset")
+    async def chat_reset() -> JSONResponse:
+        await services.db.clear_history(WEB_CHAT)
+        return JSONResponse({"text": "🧹 Contexte effacé."})
 
     # ------------------------------------------------------------- proactive
     @app.get("/proactive", response_class=HTMLResponse)

@@ -66,7 +66,8 @@ Sans `make` : `cp .env.example .env && cp config.example.yaml config.yaml`, puis
 `uv run homelab-agent render-engines -o engines`, `./scripts/download-models.sh` et
 `docker compose --profile full up -d --build`.
 
-Le panneau est ensuite sur <http://127.0.0.1:8099> (mot de passe `PANEL_PASSWORD`). Sur un serveur
+Le panneau est ensuite sur <http://127.0.0.1:8099> (mot de passe `PANEL_PASSWORD`), avec un **chat**
+intégré pour parler à l'agent sans Telegram. Sur un serveur
 distant : `ssh -L 8099:127.0.0.1:8099 serveur`.
 
 ## Profils Compose

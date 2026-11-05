@@ -27,6 +27,9 @@ Telegram ◄─polling─►│ gateway ─► orchestrateur ─► routeur ─�
 | `gateway/base.py` | interfaces `Gateway`, `Replier`, `Notifier` (prêtes pour WhatsApp / voix en phase 2) |
 | `gateway/telegram.py` | allowlist, commandes, streaming par édition, boutons Oui/Non — indépendant de la bibliothèque |
 | `gateway/aiogram_adapter.py` | branchement sur l'API Bot via aiogram 3 en long polling |
+| `gateway/home_remote.py` | télécommande `/maison` (claviers Telegram, sans LLM) |
+| `web/chat.py` | deuxième passerelle : chat du panneau (SSE), boîte de réception, aiguillage des notifications |
+| `core/memory.py` | mémoire longue (notes par conversation, injectées comme données) |
 | `core/orchestrator.py` | boucle agent : message → chemin rapide ou routage → LLM ↔ outils → réponse |
 | `core/fastpath.py` | commandes triviales sans LLM |
 | `core/router.py` | choix du niveau, santé des moteurs, repli sur le niveau voisin |

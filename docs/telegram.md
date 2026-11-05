@@ -80,3 +80,11 @@ Avec `voice.enabled: true`, un vocal est téléchargé, transcrit en local, affi
 L'interface `Gateway` (`gateway/base.py`) permet d'ajouter WhatsApp ou une entrée vocale sans toucher
 à l'orchestrateur : une gateway transforme les messages entrants en `IncomingMessage` et fournit un
 `Replier` (envoyer, streamer, confirmer).
+
+## Sans Telegram : le chat du panneau
+
+La page **Chat** du panneau web (<http://127.0.0.1:8099/chat>) parle au même agent : chemin
+rapide, routage, outils, permissions, confirmations (boutons Oui/Non) et mémoire. Les réponses
+s'affichent en streaming ; le résultat d'une tâche CPU (`/deep …`) arrive dans la page quand il est
+prêt. La conversation web a son propre historique (bouton 🧹 pour l'effacer). C'est aussi le moyen
+le plus simple d'essayer la stack `dev` (`make dev`, mot de passe `dev-password-123`).

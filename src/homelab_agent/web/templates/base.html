@@ -11,6 +11,7 @@
   <strong>🏠 homelab-agent</strong>
   {% set p = request.url.path %}
   <a href="/" class="{{ 'on' if p == '/' }}">État</a>
+  <a href="/chat" class="{{ 'on' if p == '/chat' }}">Chat</a>
   <a href="/permissions" class="{{ 'on' if p.startswith('/permissions') }}">Permissions</a>
   <a href="/proactive" class="{{ 'on' if p == '/proactive' }}">Proactif</a>
   <a href="/budget" class="{{ 'on' if p == '/budget' }}">Budget</a>
