@@ -5,6 +5,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## [Non publié]
 
+## [0.4.0] - 2026-11-05
+
 ### Ajouté
 - **Réponses vocales** (Piper, local) : note vocale OGG/Opus en plus du texte (`voice.reply_voice`),
   image `tts`, texte rendu prononçable ; aller-retour vérifié avec les vrais moteurs.
@@ -55,5 +57,6 @@ Première version publique.
 - Panneau web (FastAPI + HTMX) : état, permissions, budget, tâches, audit, éditeur de config.
 - Faux services (LLM, Home Assistant, Telegram), tests, scénario e2e, CI/CD.
 
-[Non publié]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.1.0...HEAD
+[Non publié]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.1.0...v0.4.0
 [0.1.0]: https://github.com/FrancoisPJ/HomeLab-Agent/releases/tag/v0.1.0

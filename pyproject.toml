@@ -1,6 +1,6 @@
 [project]
 name = "homelab-agent"
-version = "0.1.0"
+version = "0.4.0"
 description = "Personal AI agent driven from Telegram, routing between local llama.cpp (GPU/CPU) and cloud LLMs, with Home Assistant control."
 readme = "README.md"
 license = "Apache-2.0"
