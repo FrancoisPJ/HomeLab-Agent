@@ -131,7 +131,8 @@ class LLMBackend(abc.ABC):
         tools: list[ToolSpec] | None = None,
         *,
         max_tokens: int | None = None,
-    ) -> ChatResult: ...
+    ) -> ChatResult:
+        """One chat completion (may contain tool calls)."""
 
     async def stream(
         self,
@@ -147,7 +148,8 @@ class LLMBackend(abc.ABC):
         yield StreamDone(result)
 
     @abc.abstractmethod
-    async def health(self) -> bool: ...
+    async def health(self) -> bool:
+        """True when the engine answers."""
 
     async def aclose(self) -> None:  # pragma: no cover - default no-op
         return None

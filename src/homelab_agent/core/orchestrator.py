@@ -296,7 +296,7 @@ class Orchestrator:
         if history_rows and history_rows[-1].role == "user" and history_rows[-1].content == text:
             history_rows = history_rows[:-1]
         history = [
-            Message(cast("Role", h.role), h.content)
+            Message(cast(Role, h.role), h.content)
             for h in history_rows[-cfg.agent.history_messages :]
             if h.role in ("user", "assistant")
         ]

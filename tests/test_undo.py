@@ -24,9 +24,12 @@ def test_undo_store_ttl_and_size() -> None:
     store = UndoStore(clock=lambda: now[0])
     for i in range(12):
         store.push("c", UndoRecord(f"a{i}", {"light.x": "on"}, now[0]))
-    assert store.pop("c").description == "a11"  # type: ignore[union-attr]
+    last = store.pop("c")
+    assert last is not None
+    assert last.description == "a11"
     now[0] = 4000
-    assert store.pop("c") is None  # older than one hour
+    expired = store.pop("c")
+    assert expired is None  # older than one hour
 
 
 async def test_undo_restores_previous_states(tmp_path: Path) -> None:

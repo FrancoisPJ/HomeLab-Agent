@@ -210,7 +210,7 @@ async def test_confirmation_timeout() -> None:
     )  # type: ignore[arg-type]
     section_fast = section.model_copy(update={"confirm_timeout_s": 5})
     f.cfg = lambda: section_fast
-    import homelab_agent.gateway.telegram as tgmod
+    from homelab_agent.gateway import telegram as tgmod
 
     orig = tgmod.asyncio.wait_for
 

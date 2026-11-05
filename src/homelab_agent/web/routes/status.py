@@ -9,10 +9,10 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-from homelab_agent.app import Services
 from homelab_agent.config.models import Tier
 from homelab_agent.core.router import TIER_LABELS
 from homelab_agent.observability.metrics import METRICS
+from homelab_agent.services import Services
 from homelab_agent.web.dashboard import WINDOW, build_dashboard
 from homelab_agent.web.deps import ServicesDep, render
 from homelab_agent.web.summary import house_summary

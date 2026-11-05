@@ -9,8 +9,8 @@ from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from homelab_agent.app import Services
 from homelab_agent.core.routines import fr_days
+from homelab_agent.services import Services
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
