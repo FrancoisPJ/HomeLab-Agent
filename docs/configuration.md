@@ -87,6 +87,9 @@ size exceeded » — la demande passe au moteur suivant (niveau voisin), sans ma
 `allowed_services`, `untargeted_domains`, `context_max_chars`, `context_domains`,
 `request_timeout_s`. Voir [home-assistant.md](home-assistant.md). Préférez une URL `https://` :
 en HTTP, le token transite en clair sur le réseau local.
+`cameras` (désactivé par défaut) : `enabled`, `model_tool`, `max_per_minute`, `max_per_request`,
+`max_bytes`, `timeout_s` — photos des caméras envoyées dans Telegram, jamais à un modèle. Voir
+[home-assistant.md](home-assistant.md#caméras).
 
 ### `web`
 `enabled`, `bind` (127.0.0.1), `port`, `password_env`. Dans Docker, le conteneur écoute sur

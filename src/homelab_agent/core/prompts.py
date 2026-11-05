@@ -19,6 +19,10 @@ Règles :
 - Si un outil renvoie "permission denied" ou "declined", ne réessaie pas :
   explique-le."""
 
+CAMERA_HINT = """- Pour montrer une caméra (« montre-moi le salon », « que se passe-t-il dans
+  l'entrée ? »), appelle ha_camera_snapshot : la photo part directement dans la conversation.
+  Tu ne vois pas l'image : ne la décris jamais, dis seulement qu'elle a été envoyée."""
+
 ESCALATE_HINT = """- Si la demande est trop complexe pour toi (raisonnement long, rédaction,
   analyse), appelle l'outil escalate (cpu = non urgent, cloud = urgent ou très complexe)."""
 
@@ -31,6 +35,9 @@ def build_system_prompt(
     parts = [BASE_PROMPT.format(language=language, now=now)]
     if tier == Tier.GPU and cfg.routing.escalation.allow_model_escalation:
         parts.append(ESCALATE_HINT)
+    cams = cfg.home_assistant.cameras
+    if cfg.home_assistant.enabled and cams.enabled and cams.model_tool:
+        parts.append(CAMERA_HINT)
     if cfg.agent.system_prompt:
         parts.append(cfg.agent.system_prompt.strip())
     if memories:

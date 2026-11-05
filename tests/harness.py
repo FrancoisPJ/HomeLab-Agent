@@ -39,6 +39,7 @@ class RecordingNotifier:
         self.sent: list[tuple[str, str]] = []
         self.actions: list[ActionButton] = []
         self.replies: list[str] = []
+        self.photos: list[tuple[str, bytes, str]] = []  # (chat_id, image, caption)
 
     async def notify(self, chat_id: str, text: str) -> None:
         self.sent.append((chat_id, text))
@@ -56,6 +57,10 @@ class RecordingNotifier:
             async def send(self, text: str) -> None:
                 await super().send(text)
                 notifier.replies.append(text)
+
+            async def send_photo(self, image: bytes, caption: str) -> None:
+                await super().send_photo(image, caption)
+                notifier.photos.append((chat_id, image, caption))
 
             def stream(self):  # type: ignore[no-untyped-def]
                 handle = super().stream()

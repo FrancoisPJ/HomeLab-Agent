@@ -49,6 +49,8 @@ class BotApi(Protocol):
 
     async def send_voice(self, chat_id: str, audio: bytes) -> None: ...
 
+    async def send_photo(self, chat_id: str, image: bytes, caption: str = "") -> None: ...
+
 
 def split_text(text: str, limit: int) -> list[str]:
     """Split on paragraph/line boundaries when possible, never above ``limit``."""
@@ -198,6 +200,9 @@ class TelegramReplier:
 
     async def send_actions(self, text: str, actions: list[ActionButton]) -> None:
         await self.f.notify_actions(self.chat_id, text, actions, ttl_s=3600)
+
+    async def send_photo(self, image: bytes, caption: str) -> None:
+        await self.f.api.send_photo(self.chat_id, image, caption[:1024])  # Telegram caption cap
 
 
 Handler = Callable[[IncomingMessage, Replier], Awaitable[None]]

@@ -191,6 +191,23 @@ def create_app() -> FastAPI:
                 msg["voice_text"] = None
             tg.sent.append({"op": "voice", **msg})
             return {"ok": True, "result": msg}
+        if m == "sendphoto":
+            form = await request.form()
+            upload = form.get("photo")
+            if isinstance(upload, str) and upload.startswith("attach://"):
+                upload = form.get(upload.removeprefix("attach://"))  # aiogram's multipart style
+            image = (
+                await upload.read() if upload is not None and not isinstance(upload, str) else b""
+            )
+            msg = tg.store(int(str(form.get("chat_id"))), "", None)
+            fid = f"photo{msg['message_id']}"
+            msg["photo"] = [{"file_id": fid, "file_unique_id": fid, "width": 1, "height": 1}]
+            msg["caption"] = str(form.get("caption") or "")
+            msg["photo_size"] = len(image)
+            msg["photo_is_jpeg"] = image[:3] == b"\xff\xd8\xff"
+            tg.files[fid] = image
+            tg.sent.append({"op": "photo", **msg})
+            return {"ok": True, "result": msg}
         if m == "getfile":
             fid = str(p["file_id"])
             if fid not in tg.files:

@@ -75,6 +75,13 @@ class AiogramBotApi:
             lambda: self.bot.send_voice(int(chat_id), BufferedInputFile(audio, "reponse.ogg"))
         )
 
+    async def send_photo(self, chat_id: str, image: bytes, caption: str = "") -> None:
+        await self._retry(
+            lambda: self.bot.send_photo(
+                int(chat_id), BufferedInputFile(image, "camera.jpg"), caption=caption or None
+            )
+        )
+
     async def download_file(self, file_id: str) -> bytes:
         buf = await self.bot.download(file_id)
         if buf is None:

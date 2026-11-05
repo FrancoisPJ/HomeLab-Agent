@@ -21,6 +21,7 @@ Réponse visée sous 7 jours. Seule la dernière version publiée reçoit des co
 | Panneau web | écoute sur `127.0.0.1` ; mot de passe obligatoire (refus de démarrer sinon) ; limitation des essais ; cookie `SameSite=Strict` |
 | Métriques / Grafana | `/metrics` authentifié ; le jeton de collecte (`METRICS_TOKEN`) n'ouvre que `GET /metrics` ; Prometheus non publié, Grafana sur `127.0.0.1` ; secrets générés par `make init` |
 | Moteurs llama.cpp / whisper / TTS | aucune authentification : jamais publiés hors du réseau Compose |
+| Caméras | désactivées par défaut ; caméra soumise aux permissions de lecture ; image envoyée seulement à la conversation qui la demande, jamais à un modèle (local ou cloud) ; limite par minute ; journal d'audit |
 | Actions Home Assistant | moteur de permissions dans le code (pas dans le prompt), cible explicite obligatoire, services d'administration bloqués, confirmation Oui/Non configurable, journal d'audit |
 | Injection d'instructions | les données Home Assistant / web sont nettoyées et marquées comme données ; les routines et la mémoire créées depuis une conversation sont visibles et ne peuvent pas écrire de `${…}` dans la config |
 | Secrets | uniquement en variables d'environnement, masqués dans les journaux, gitleaks en CI |

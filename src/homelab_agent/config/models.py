@@ -232,6 +232,27 @@ class PermissionRule(Selector):
     confirm: bool = False
 
 
+class CameraSection(_Base):
+    """Camera snapshots sent to the chat that asks (/camera, or the agent on request)."""
+
+    enabled: bool = Field(
+        False,
+        description="Allow camera snapshots. Off by default: cameras are sensitive. A camera "
+        "must also be readable by the permission rules.",
+    )
+    model_tool: bool = Field(
+        True,
+        description="Let the agent send a snapshot when asked in plain words. The image goes "
+        "straight to the chat: it is never given to any model, local or cloud.",
+    )
+    max_per_minute: int = Field(6, ge=1, le=60, description="Snapshots per chat and per minute.")
+    max_per_request: int = Field(4, ge=1, le=10, description="Cameras sent for one request.")
+    max_bytes: int = Field(
+        8_000_000, ge=100_000, le=20_000_000, description="Largest image accepted from HA."
+    )
+    timeout_s: float = Field(15, gt=0, le=120)
+
+
 class HomeAssistantSection(_Base):
     enabled: bool = True
     url: str = "http://homeassistant.local:8123"
@@ -268,6 +289,7 @@ class HomeAssistantSection(_Base):
         ]
     )  # fmt: skip
     request_timeout_s: float = Field(10, gt=0)
+    cameras: CameraSection = Field(default_factory=CameraSection)
 
 
 # ----------------------------------------------------------------------------- web

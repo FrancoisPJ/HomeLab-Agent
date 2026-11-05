@@ -31,6 +31,7 @@ from homelab_agent.llm.base import LLMBackend
 from homelab_agent.llm.factory import build_backends
 from homelab_agent.observability.logging import MASKER, setup_logging
 from homelab_agent.store.db import Database
+from homelab_agent.tools.homeassistant.cameras import CameraService, register_camera_tools
 from homelab_agent.tools.homeassistant.client import HomeAssistantClient
 from homelab_agent.tools.homeassistant.permissions import PermissionEngine
 from homelab_agent.tools.homeassistant.tools import HomeAssistantService, register_ha_tools
@@ -75,6 +76,7 @@ class Services:
     routine_manager: RoutineManager | None = None
     stt: SpeechToText | None = None
     tts: TextToSpeech | None = None
+    cameras: CameraService | None = None
     webchat: WebChatHub = field(default_factory=WebChatHub)
     started: bool = False
 
@@ -286,6 +288,8 @@ async def build_services(store: ConfigStore, *, start_background: bool = True) -
     if ha is not None:
         services.alerts = AlertEngine(lambda: store.config, ha, lambda: services.notifier, db)
         services.alerts.attach()
+        services.cameras = CameraService(ha, lambda: store.config, lambda: services.notifier)
+        register_camera_tools(registry, services.cameras)
     if start_background:
         health.start(backends, cfg.routing.health_interval_s)
         if ha is not None:
@@ -430,6 +434,11 @@ async def run(config_path: str) -> None:
         gateway.attach(frontend)
         if services.ha is not None:
             HomeRemote(frontend, services.ha, lambda: store.config.telegram).attach()
+        if services.cameras is not None:
+            frontend.commands["camera"] = (
+                "photo des caméras d'une pièce",
+                services.cameras.command,
+            )
         services.notifier = RoutingNotifier(frontend, services.webchat)
         if not cfg.telegram.allowed_user_ids:
             log.warning("telegram.allowed_user_ids is empty: every message will be ignored")

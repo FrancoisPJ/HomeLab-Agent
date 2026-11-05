@@ -59,6 +59,8 @@ class Tool:
     parameters: dict[str, Any]
     handler: Handler
     tags: set[str] = field(default_factory=set)
+    #: offered to the models only while this returns True (e.g. a feature switch in config)
+    available: Callable[[], bool] | None = None
 
     @property
     def spec(self) -> ToolSpec:
@@ -113,7 +115,11 @@ class ToolRegistry:
 
     def specs(self, *, exclude_tags: set[str] | None = None) -> list[ToolSpec]:
         exclude_tags = exclude_tags or set()
-        return [t.spec for t in self._tools.values() if not (t.tags & exclude_tags)]
+        return [
+            t.spec
+            for t in self._tools.values()
+            if not (t.tags & exclude_tags) and (t.available is None or t.available())
+        ]
 
     async def execute(self, name: str, args: dict[str, Any], ctx: ToolContext) -> ToolResult:
         tool = self._tools.get(name)
