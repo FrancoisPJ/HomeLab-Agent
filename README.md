@@ -26,6 +26,18 @@ Les **messages vocaux** Telegram sont transcrits en local avec whisper.cpp, et l
 > services (LLM, Home Assistant, Telegram). Avant d'en dépendre, déroulez la
 > [checklist de recette](docs/deployment.md#checklist-de-recette-sur-le-vrai-matériel).
 
+## Aperçu
+
+| Chat du panneau (streaming, bouton ↩️ Annuler, mémoire, tâche CPU) | Domotique proactive |
+|---|---|
+| ![Chat du panneau web](docs/images/chat-light.png) | ![Alertes et routines](docs/images/proactive.png) |
+| **État des moteurs et dernières réponses** | **Confirmation d'une action sensible (thème sombre)** |
+| ![État](docs/images/status.png) | ![Confirmation Oui/Non](docs/images/chat-dark.png) |
+
+<sub>Captures de la stack `make dev` : les moteurs, Home Assistant et Telegram y sont simulés (d'où
+les « Réponse simulée »). Autres pages : [permissions](docs/images/permissions.png),
+[audit](docs/images/audit.png).</sub>
+
 ## Architecture
 
 ```

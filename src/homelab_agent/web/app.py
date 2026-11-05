@@ -22,7 +22,7 @@ from fastapi.templating import Jinja2Templates
 from homelab_agent.config.loader import ConfigError
 from homelab_agent.config.models import AppConfig, Policy, Tier
 from homelab_agent.core.router import TIER_LABELS
-from homelab_agent.core.routines import fr_when
+from homelab_agent.core.routines import fr_days, fr_when
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.web.auth import COOKIE, check_password, check_session, make_session
 from homelab_agent.web.chat import WEB_CHAT, inbox_events, turn_events
@@ -54,6 +54,7 @@ def require_panel_secret(cfg: AppConfig) -> str:
 def create_app(services: Services) -> FastAPI:
     app = FastAPI(title="homelab-agent", docs_url=None, redoc_url=None, openapi_url=None)
     templates = Jinja2Templates(directory=str(HERE / "templates"))
+    templates.env.filters["days_fr"] = fr_days
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     def password() -> str:

@@ -26,7 +26,7 @@ alertes {% if cfg.proactive.alerts_active %}<span class="ok">● actives</span>{
 <p class="muted">Crée-les depuis Telegram en langage naturel (« rappelle-moi de sortir les poubelles tous les mardis à 20h ») ou dans la configuration.</p>
 <table><tr><th>Nom</th><th>Heure</th><th>Quand</th><th>Type</th><th>Prochaine</th><th></th></tr>
 {% for item in routines %}{% set r = item.r %}<tr class="{{ '' if r.enabled else 'muted' }}"><td><code>{{ r.name }}</code>{% if r.created_by %}<br><span class="muted" style="font-size:.8rem">créée depuis le chat</span>{% endif %}</td><td>{{ r.at }}</td>
-<td>{% if r.date %}une fois, le {{ r.date }}{% else %}{{ r.days|join(" ") }}{% endif %}</td>
+<td>{% if r.date %}une fois, le {{ r.date }}{% else %}{{ r.days|days_fr }}{% endif %}</td>
 <td>{% if r.check %}vérification {{ r.check.domains|join("/") }} ∈ {{ r.check.states|join("/") }}{% elif r.prompt %}demande ({{ r.tier.value }}) : <span class="muted">{{ r.prompt[:80] }}</span>{% else %}rappel : <span class="muted">{{ r.message[:80] }}</span>{% endif %}</td>
 <td>{{ item.next or '—' }}</td>
 <td class="inline"><form method="post" action="/proactive/run/{{ r.name }}"><button class="ghost">Lancer</button></form>

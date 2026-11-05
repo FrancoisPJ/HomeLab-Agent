@@ -29,7 +29,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 - Rechargement automatique de `config.yaml` modifié à la main, purge quotidienne de la base,
   commande `homelab-agent healthcheck`.
 - Projet GitHub : modèles de tickets et de PR, CONTRIBUTING, SECURITY, devcontainer, CodeQL,
-  CI sur toutes les branches.
+  CI sur toutes les branches, captures d'écran dans le README.
 
 ### Sécurité
 - Services d'administration Home Assistant bloqués (`hassio.*`, `homeassistant.restart`…),

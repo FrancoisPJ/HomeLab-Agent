@@ -93,6 +93,17 @@ def parse_date(value: Any, today: date) -> str | None:
         raise ValueError(f"date invalide : {value!r} (format AAAA-MM-JJ ou 'demain')") from exc
 
 
+def fr_days(days: list[str]) -> str:
+    """'tous les jours', 'en semaine', 'le week-end' or 'lun mer ven'."""
+    if len(days) == 7:
+        return "tous les jours"
+    if days == ["mon", "tue", "wed", "thu", "fri"]:
+        return "en semaine"
+    if days == ["sat", "sun"]:
+        return "le week-end"
+    return " ".join(_DAY_LABELS.get(d, d) for d in days)
+
+
 def fr_when(dt: datetime) -> str:
     """'mar 10/11 20:00' (French weekday, no locale needed)."""
     return f"{_DAY_LABELS[WEEKDAYS[dt.weekday()]]} {dt:%d/%m %H:%M}"
