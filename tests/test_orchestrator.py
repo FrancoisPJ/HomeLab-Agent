@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from homelab_agent.config.models import Tier
 from homelab_agent.gateway.base import BufferedReplier, IncomingMessage
 
@@ -193,4 +195,100 @@ async def test_history_is_used_and_reset(tmp_path: Path) -> None:
     await h.db.clear_history("111")
     msgs = await h.orchestrator.build_messages("111", Tier.GPU, "x")
     assert [m.role for m in msgs] == ["system", "user"]
+    await h.close()
+
+
+def _quality_overrides() -> dict[str, object]:
+    return {
+        "backends": {
+            "gpu_fast": {
+                "kind": "openai_compat",
+                "tier": "gpu",
+                "url": "http://gpu/v1",
+                "model": "fast",
+            },
+            "gpu_quality": {
+                "kind": "openai_compat",
+                "tier": "gpu",
+                "url": "http://gpu/v1",
+                "model": "quality",
+            },
+            "cpu_heavy": {
+                "kind": "openai_compat",
+                "tier": "cpu",
+                "url": "http://cpu/v1",
+                "model": "heavy",
+            },
+            "cloud": {
+                "kind": "openai_compat",
+                "tier": "cloud",
+                "url": "http://cloud/v1",
+                "model": "big",
+            },
+        },
+        "routing": {
+            "tiers": {"gpu": ["gpu_fast"], "cpu": ["cpu_heavy"], "cloud": ["cloud"]},
+            "fast_path": False,
+            "gpu_quality": {
+                "backend": "gpu_quality",
+                "keywords": ["pourquoi"],
+                "retry_after_s": 300,
+            },
+        },
+    }
+
+
+async def test_medium_request_uses_quality_model(tmp_path: Path) -> None:
+    h = await build_harness(tmp_path, **_quality_overrides())
+    r = BufferedReplier()
+    await h.orchestrator.handle(msg("pourquoi le chauffage s'allume ?"), r)
+    assert "Réponse simulée (quality)" in r.messages[-1]
+    await h.close()
+
+
+async def test_quality_model_cannot_load_falls_back_to_fast(tmp_path: Path) -> None:
+    h = await build_harness(tmp_path, **_quality_overrides())
+    await h.aset_llm("gpu_quality", fail=True)  # e.g. VRAM taken by Jellyfin
+    r = BufferedReplier()
+    await h.orchestrator.handle(msg("pourquoi le chauffage s'allume ?"), r)
+    assert "Réponse simulée (fast)" in r.messages[-1]
+    assert not any("tâche" in m for m in r.messages)  # stayed synchronous on the GPU tier
+    assert not h.router.health.is_up("gpu_quality")
+    await h.close()
+
+
+async def test_history_is_trimmed_to_fit_context(tmp_path: Path) -> None:
+    h = await build_harness(tmp_path)
+    for i in range(10):
+        await h.db.add_message("111", "user", f"question {i} " + "x" * 400)
+        await h.db.add_message("111", "assistant", f"réponse {i} " + "y" * 400)
+    backend = h.backends["gpu_fast"]
+    full = await h.orchestrator.build_messages("111", Tier.GPU, "dernière question")
+    backend.max_context = 1500
+    backend.max_output_tokens = 200
+    fitted = await h.orchestrator.build_messages("111", Tier.GPU, "dernière question", backend)
+    assert len(fitted) < len(full)
+    assert fitted[-1].content == "dernière question"
+    assert fitted[-2].content.startswith("réponse 9")  # the most recent exchange is kept
+    assert sum(len(m.content) // 3 + 5 for m in fitted) <= 1500 - 200
+    await h.close()
+
+
+async def test_context_overflow_goes_to_a_bigger_backend(tmp_path: Path) -> None:
+    from homelab_agent.llm.base import ContextOverflow
+
+    h = await build_harness(tmp_path)
+    backend = h.backends["gpu_fast"]
+    backend.max_context = 600
+    backend.max_output_tokens = 100
+    with pytest.raises(ContextOverflow):
+        await h.orchestrator.build_messages("111", Tier.GPU, "z" * 3000, backend)
+    # the server-side limit (HTTP 400 from llama-server) is handled the same way
+    backend.max_context = None
+    await h.aset_llm("gpu_fast", n_ctx=300)
+    r = BufferedReplier()
+    await h.orchestrator.handle(msg("dis bonjour " + "mot " * 100), r)
+    assert any("trop long pour gpu_fast" in m for m in r.messages)
+    assert any("tâche #" in m for m in r.messages)  # went on to the CPU tier
+    assert h.router.health.is_up("gpu_fast")  # not marked down: it is healthy
     await h.close()

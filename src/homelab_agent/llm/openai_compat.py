@@ -15,6 +15,7 @@ from homelab_agent.llm.base import (
     BackendTimeout,
     BackendUnavailable,
     ChatResult,
+    ContextOverflow,
     LLMBackend,
     Message,
     StreamDelta,
@@ -81,6 +82,8 @@ class OpenAICompatClient(LLMBackend):
     ) -> None:
         super().__init__(name, cfg.tier, cfg.model)
         self.cfg = cfg
+        self.max_context = cfg.max_context
+        self.max_output_tokens = cfg.max_output_tokens
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = httpx.AsyncClient(
             base_url=cfg.url.rstrip("/"),
@@ -121,7 +124,13 @@ class OpenAICompatClient(LLMBackend):
         if resp.status_code >= 500 or resp.status_code in (408, 429):
             raise BackendUnavailable(f"{self.name}: HTTP {resp.status_code}")
         if resp.status_code >= 400:
-            raise BackendError(f"{self.name}: HTTP {resp.status_code}: {resp.text[:200]}")
+            body = resp.text[:300]
+            low = body.lower()
+            if resp.status_code in (400, 413) and (
+                "context" in low or "too long" in low or "too many tokens" in low
+            ):
+                raise ContextOverflow(f"{self.name}: prompt exceeds the context window")
+            raise BackendError(f"{self.name}: HTTP {resp.status_code}: {body[:200]}")
 
     async def chat(
         self,

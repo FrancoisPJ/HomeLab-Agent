@@ -43,6 +43,22 @@ Si la VRAM est prise (Jellyfin transcode) et que le chargement échoue, llama-sw
 l'agent marque le moteur indisponible pendant `routing.unhealthy_cooldown_s` et **bascule sur le
 niveau CPU** en prévenant brièvement l'utilisateur.
 
+### Modèle « qualité » : une montée en gamme, pas un secours
+
+`routing.gpu_quality` désigne un second modèle GPU (≈ 8B) utilisé pour les demandes « moyennes »
+(message d'au moins `min_chars` caractères, ou contenant un des `keywords`). Ce n'est **pas** un
+modèle de secours : quand la VRAM manque pour le 4B, elle manque aussi pour le 8B. Fonctionnement :
+
+1. demande moyenne → l'agent demande le modèle `quality` ; llama-swap décharge le modèle rapide et
+   tente de charger le 8B ;
+2. si le chargement échoue (Jellyfin occupe la VRAM), l'agent repasse **immédiatement sur le modèle
+   rapide**, sans basculer sur le CPU, et laisse le modèle qualité de côté pendant `retry_after_s` ;
+3. si le modèle rapide lui-même est indisponible, on bascule sur le niveau voisin (CPU), jamais sur
+   le modèle qualité.
+
+Le signal « VRAM libre » est donc le succès du chargement lui-même : pas besoin d'accès à
+`nvidia-smi` depuis l'agent. Pour désactiver : `routing.gpu_quality.backend: null`.
+
 Réglages utiles pour réduire l'empreinte : `cache_type_k/v: q8_0`, `flash_attn: true`, `ctx_size`
 plus petit, ou `n_gpu_layers` inférieur à 99 (une partie du modèle reste en RAM, plus lent).
 

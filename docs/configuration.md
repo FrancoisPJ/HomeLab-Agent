@@ -45,17 +45,24 @@ Un dictionnaire `nom → moteur`. Champs communs : `tier` (`gpu`, `cpu`, `cloud`
 
 | `kind` | Champs propres |
 |---|---|
-| `openai_compat` | `url` (avec `/v1`), `api_key_env` (facultatif), `max_context`, `concurrency` |
+| `openai_compat` | `url` (avec `/v1`), `api_key_env` (facultatif), `max_context` (doit correspondre au `ctx_size` du modèle) |
 | `anthropic` | `api_key_env`, `base_url` |
 | `gemini` | `api_key_env` |
 
 Pour les moteurs locaux, `model` est le `name` d'un élément de `models.items` (llama-swap s'en sert pour
 charger le bon fichier).
 
+**Budget de contexte.** Avant chaque appel à un moteur local, l'agent estime la taille du prompt
+(prompt système, résumé Home Assistant, outils, historique, message) et la fait tenir dans
+`max_context - max_output_tokens` : il retire d'abord les plus anciens échanges, puis raccourcit le
+résumé Home Assistant. Si le message seul ne tient pas — ou si le serveur répond quand même « context
+size exceeded » — la demande passe au moteur suivant (niveau voisin), sans marquer le moteur en panne.
+
 ### `routing`
 | Clé | Rôle |
 |---|---|
 | `fast_path.enabled`, `fast_path.aliases` | chemin rapide et alias « nom prononcé → entity_id » |
+| `gpu_quality.backend`, `min_chars`, `keywords`, `retry_after_s` | montée en qualité sur GPU pour les demandes moyennes ([gpu-sharing.md](gpu-sharing.md)) |
 | `tiers.gpu / cpu / cloud` | moteurs de chaque niveau, par ordre de préférence (l'ordre du cloud = préférence Claude/Gemini) |
 | `escalation.to_cpu_keywords`, `to_cloud_keywords` | mots-clés d'escalade |
 | `escalation.long_message_chars` | au-delà, le message va au CPU (0 = jamais) |
@@ -94,6 +101,10 @@ Les GGUF servis par llama.cpp. Voir [models.md](models.md).
 | `mlock` | verrouille le modèle en RAM |
 | `ttl_s` | déchargement après inactivité (0 = jamais) |
 | `extra_args` | options supplémentaires de `llama-server` |
+
+Par moteur (`models.gpu`, `models.cpu`) : `default_threads`, `health_timeout_s` et `swap` (`true` = un
+seul modèle chargé à la fois ; `false` = tous les modèles du moteur restent chargés ensemble, utilisé
+par le préréglage `cpu-only`).
 
 Après modification : `make engines` (génère `engines/llama-swap-*.yaml`), `make models`, `make restart`.
 

@@ -61,11 +61,16 @@ def render_llama_swap(cfg: AppConfig, engine: str) -> str:
         if item.ttl_s:
             entry["ttl"] = item.ttl_s
         models[item.name] = entry
-    doc = {
+    doc: dict[str, Any] = {
         "healthCheckTimeout": settings.health_timeout_s,
         "logLevel": "info",
         "models": models,
     }
+    if not settings.swap and len(models) > 1:
+        # keep every model of this engine loaded side by side
+        doc["groups"] = {
+            f"{engine}-all": {"swap": False, "exclusive": True, "members": list(models)}
+        }
     y = YAML()
     y.width = 4096
     buf = io.StringIO()

@@ -13,8 +13,8 @@ make restart
 1. **Budget mémoire.** Taille du fichier GGUF + cache KV (contexte) + ~0,5 Go de marge.
    - GPU rapide : la RTX 3070 a 8 Go, mais Jellyfin peut en prendre pendant un transcodage : visez
      **≤ 3 Go** pour le modèle rapide.
-   - GPU secours : ≈ 5 Go, utilisé seulement quand la VRAM est libre (llama-swap décharge le modèle
-     rapide avant de le charger ; si le chargement échoue, on bascule sur le CPU).
+   - GPU qualité : ≈ 5 Go, pour les demandes moyennes, seulement si son chargement réussit (sinon
+     retour au modèle rapide, voir [gpu-sharing.md](gpu-sharing.md)).
    - CPU lourd : ≈ **12 Go** disponibles → un modèle dense de 14B en Q4 (≈ 9 Go) passe ; un MoE de 30B
      (≈ 18 Go) ne passe pas.
 2. **Quantification.** `Q4_K_M` est le compromis courant ; `Q5_K_M` si la mémoire le permet.
@@ -49,7 +49,7 @@ re-vérifiez la licence et le fichier, et préférez le SHA256 affiché sur Hugg
 | Usage | Dépôt | Fichier | Taille | SHA256 (Hugging Face) |
 |---|---|---|---|---|
 | GPU rapide (défaut) | `Qwen/Qwen3-4B-GGUF` | `Qwen3-4B-Q4_K_M.gguf` | ≈ 2,5 Go | `7485fe6f…fdf5` |
-| GPU secours (défaut) | `Qwen/Qwen3-8B-GGUF` | `Qwen3-8B-Q4_K_M.gguf` | ≈ 5,0 Go | `d98cdcbd…5785` |
+| GPU qualité (défaut) | `Qwen/Qwen3-8B-GGUF` | `Qwen3-8B-Q4_K_M.gguf` | ≈ 5,0 Go | `d98cdcbd…5785` |
 | CPU lourd (défaut) | `Qwen/Qwen3-14B-GGUF` | `Qwen3-14B-Q4_K_M.gguf` | ≈ 9,0 Go | `500a8806…81f0` |
 
 Autres familles à évaluer avec `bench.py` (dépôts existants, fichiers à choisir vous-même) :

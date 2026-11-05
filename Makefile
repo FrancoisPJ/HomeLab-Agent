@@ -4,6 +4,7 @@ UV ?= uv
 COMPOSE ?= docker compose
 PROFILE ?= full
 CONFIG ?= config.yaml
+PRESET ?=
 RUN := $(UV) run
 
 .DEFAULT_GOAL := help
@@ -17,9 +18,9 @@ setup: ## Install Python deps (uv) and git hooks
 	$(UV) sync
 	$(RUN) pre-commit install || true
 
-init: ## Create .env, config.yaml, data/ and models/ from the examples (never overwrites)
+init: ## Create .env, config.yaml, data/, models/ (PRESET=cpu-only for a host without GPU)
 	@test -f .env || (cp .env.example .env && echo "created .env — edit it")
-	@test -f $(CONFIG) || (cp config.example.yaml $(CONFIG) && echo "created $(CONFIG) — edit it")
+	@test -f $(CONFIG) || (cp config$(if $(PRESET),.$(PRESET)).example.yaml $(CONFIG) && echo "created $(CONFIG) from the $(or $(PRESET),default) preset — edit it")
 	@mkdir -p data models engines
 
 lint: ## Ruff lint + format check

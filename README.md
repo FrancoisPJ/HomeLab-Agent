@@ -8,8 +8,8 @@ Chaque demande est envoyée au moteur le plus adapté :
 
 | Niveau | Rôle | Moteur |
 |---|---|---|
-| **GPU rapide** | réponses instantanées, choix d'outil, domotique (« éteins la lumière ») | `llama.cpp` sur GPU, petit modèle chargé à la demande |
-| **CPU lourd** | tâches longues non urgentes, en arrière-plan | `llama.cpp` sur CPU, modèle plus gros |
+| **Rapide (GPU)** | réponses instantanées, choix d'outil, domotique (« éteins la lumière ») | `llama.cpp` sur GPU, petit modèle chargé à la demande, modèle « qualité » si la VRAM le permet |
+| **Lourd (CPU)** | tâches longues non urgentes, en arrière-plan | `llama.cpp` sur CPU, modèle plus gros |
 | **Cloud** | tâches très complexes ou urgentes | API Claude (Anthropic) / API Gemini (Google) |
 
 Il pilote **Home Assistant** (lecture et contrôle), avec des **permissions appliquées par le code**
@@ -68,7 +68,7 @@ distant : `ssh -L 8099:127.0.0.1:8099 serveur`.
 | Profil | Services | Usage |
 |---|---|---|
 | `full` | agent, llama-gpu, llama-cpu | serveur avec GPU NVIDIA |
-| `cpu-only` | agent, llama-cpu | pas de GPU : le niveau GPU est marqué indisponible et bascule sur le CPU |
+| `cpu-only` | agent, llama-cpu | pas de GPU : avec `make init PRESET=cpu-only`, un petit modèle CPU sert le niveau rapide |
 | `no-gpu` | agent | moteurs hébergés ailleurs (changez les `url`) ou cloud seul |
 | `dev` | agent + faux LLM, faux Home Assistant, fausse API Telegram | développement, démo, tests e2e |
 

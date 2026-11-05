@@ -86,3 +86,65 @@ async def test_empty_tier(db: Database) -> None:
     r = make(db, routing={"tiers": {"gpu": ["gpu_fast"]}})
     backend, why = await r.pick(Tier.CPU)
     assert backend is None and "aucun backend" in why
+
+
+async def test_gpu_quality_step_up_is_not_a_failover(db: Database) -> None:
+    cfg = base_config(
+        backends={
+            "gpu_fast": {
+                "kind": "openai_compat",
+                "tier": "gpu",
+                "url": "http://gpu/v1",
+                "model": "fast",
+            },
+            "gpu_quality": {
+                "kind": "openai_compat",
+                "tier": "gpu",
+                "url": "http://gpu/v1",
+                "model": "q",
+            },
+            "cpu_heavy": {
+                "kind": "openai_compat",
+                "tier": "cpu",
+                "url": "http://cpu/v1",
+                "model": "heavy",
+            },
+            "cloud": {
+                "kind": "openai_compat",
+                "tier": "cloud",
+                "url": "http://cloud/v1",
+                "model": "big",
+            },
+        },
+        routing={
+            "tiers": {"gpu": ["gpu_fast"], "cpu": ["cpu_heavy"], "cloud": ["cloud"]},
+            "gpu_quality": {"backend": "gpu_quality", "min_chars": 50, "keywords": ["pourquoi"]},
+        },
+    )
+    backends = {n: Dummy(n, b.tier) for n, b in cfg.backends.items()}
+    r = Router(
+        lambda: cfg, backends, HealthTracker(30, clock=lambda: 0.0), BudgetManager(lambda: cfg, db)
+    )  # type: ignore[arg-type]
+    assert r.decide("allume").prefer is None
+    assert r.decide("pourquoi le ciel est bleu").prefer == "gpu_quality"
+    assert r.decide("x" * 60).prefer == "gpu_quality"
+    b, _ = await r.pick(Tier.GPU, prefer="gpu_quality")
+    assert b is not None and b.name == "gpu_quality"
+    r.health.mark_down("gpu_quality", 300)
+    b, _ = await r.pick(Tier.GPU, prefer="gpu_quality")
+    assert b is not None and b.name == "gpu_fast"
+    r.health.mark_down("gpu_fast")
+    res = await r.resolve(Tier.GPU)  # fast down: never fails over to the quality model
+    assert res.tier == Tier.CPU
+
+
+def test_quality_backend_must_be_gpu() -> None:
+    import pytest
+
+    from homelab_agent.config.loader import ConfigError, parse_config
+
+    with pytest.raises(ConfigError, match="must have tier 'gpu'"):
+        parse_config(
+            "backends:\n  c: {kind: openai_compat, tier: cpu, url: 'http://x/v1', model: m}\n"
+            "routing:\n  tiers: {cpu: [c]}\n  gpu_quality: {backend: c}\n"
+        )

@@ -13,6 +13,7 @@ from homelab_agent.llm.base import (
     BackendTimeout,
     BackendUnavailable,
     ChatResult,
+    ContextOverflow,
     LLMBackend,
     Message,
     StreamDelta,
@@ -70,6 +71,7 @@ class AnthropicClient(LLMBackend):
     ) -> None:
         super().__init__(name, cfg.tier, cfg.model)
         self.cfg = cfg
+        self.max_output_tokens = cfg.max_output_tokens
         self.has_key = bool(api_key)
         self._client = anthropic.AsyncAnthropic(
             api_key=api_key or "missing",
@@ -102,6 +104,8 @@ class AnthropicClient(LLMBackend):
             return BackendUnavailable(f"{name}: {exc.__class__.__name__}")
         if isinstance(exc, anthropic.APIStatusError) and exc.status_code >= 500:
             return BackendUnavailable(f"{name}: HTTP {exc.status_code}")
+        if isinstance(exc, anthropic.BadRequestError) and "too long" in str(exc).lower():
+            return ContextOverflow(f"{name}: prompt exceeds the context window")
         return BackendError(f"{name}: {exc.__class__.__name__}")
 
     @staticmethod

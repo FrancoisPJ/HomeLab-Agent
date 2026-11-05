@@ -200,6 +200,12 @@
           "minimum": 10,
           "title": "Health Timeout S",
           "type": "integer"
+        },
+        "swap": {
+          "default": true,
+          "description": "One model loaded at a time (true). false keeps every model of this engine loaded together (e.g. fast + heavy on CPU in the cpu-only preset): mind the RAM.",
+          "title": "Swap",
+          "type": "boolean"
         }
       },
       "title": "EngineSettings",
@@ -312,6 +318,49 @@
         "model"
       ],
       "title": "GeminiBackend",
+      "type": "object"
+    },
+    "GpuQualitySection": {
+      "additionalProperties": false,
+      "description": "Step up to a bigger GPU model for medium requests, when it can be loaded.\n\nThe quality backend is *not* a failover: if it cannot be loaded (VRAM taken by another\nprocess, e.g. a Jellyfin transcode), the request goes back to the fast GPU model and the\nquality model is left alone for ``retry_after_s``.",
+      "properties": {
+        "backend": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Backend (tier gpu) used for medium requests.",
+          "title": "Backend"
+        },
+        "min_chars": {
+          "default": 200,
+          "description": "Messages at least this long are medium (0 = length ignored).",
+          "minimum": 0,
+          "title": "Min Chars",
+          "type": "integer"
+        },
+        "keywords": {
+          "description": "Messages containing one of these words are medium.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "retry_after_s": {
+          "default": 300,
+          "description": "Pause after a failed load before trying the quality model again.",
+          "minimum": 10,
+          "title": "Retry After S",
+          "type": "integer"
+        }
+      },
+      "title": "GpuQualitySection",
       "type": "object"
     },
     "HomeAssistantSection": {
@@ -748,6 +797,9 @@
       "properties": {
         "fast_path": {
           "$ref": "#/$defs/FastPathSection"
+        },
+        "gpu_quality": {
+          "$ref": "#/$defs/GpuQualitySection"
         },
         "tiers": {
           "additionalProperties": {

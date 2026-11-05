@@ -88,9 +88,19 @@ class BackendTimeout(BackendUnavailable):
     """The backend did not answer in time."""
 
 
+class ContextOverflow(BackendError):
+    """The prompt does not fit in the backend's context window (the backend itself is fine)."""
+
+
 def estimate_tokens(text: str) -> int:
     """Rough token estimate (~4 chars/token) when the backend reports nothing."""
     return max(1, len(text) // 4) if text else 0
+
+
+def budget_tokens(text: str) -> int:
+    """Conservative estimate used to fit prompts in a context window (~3 chars/token,
+    French and JSON tokenize worse than English prose)."""
+    return len(text) // 3 + 1
 
 
 def estimate_messages_tokens(messages: list[Message]) -> int:
@@ -99,6 +109,10 @@ def estimate_messages_tokens(messages: list[Message]) -> int:
 
 class LLMBackend(abc.ABC):
     """Common interface implemented by every engine client."""
+
+    #: context window in tokens, when known (local engines); None = large enough
+    max_context: int | None = None
+    max_output_tokens: int = 1024
 
     def __init__(self, name: str, tier: Tier, model: str) -> None:
         self.name = name

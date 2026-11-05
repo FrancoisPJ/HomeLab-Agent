@@ -69,10 +69,14 @@ class HomeAssistantService:
                 out.append(e)
         return sorted(out, key=lambda e: e.entity_id)
 
-    def context_summary(self) -> str:
+    def context_summary(self, max_chars: int | None = None) -> str:
         """Compact, size-limited list of readable entities, injected into prompts."""
         section = self.section
-        limit = section.context_max_chars
+        limit = (
+            section.context_max_chars
+            if max_chars is None
+            else min(max_chars, section.context_max_chars)
+        )
         order = {d: i for i, d in enumerate(section.context_domains)}
         entities = [e for e in self.readable_entities() if e.domain in order]
         entities.sort(key=lambda e: (order[e.domain], e.entity_id))

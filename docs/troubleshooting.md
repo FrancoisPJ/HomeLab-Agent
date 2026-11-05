@@ -21,7 +21,14 @@ benchmark depuis l'hôte, publiez temporairement sur `127.0.0.1:8080` uniquement
 - `llama-gpu` ne démarre pas : `docker compose logs llama-gpu`. Vérifiez le NVIDIA Container Toolkit
   et que `engines/llama-swap-gpu.yaml` existe (`make engines`).
 - Fichier de modèle absent : `make models`, et `models.dir`/`MODELS_DIR` cohérents.
-- Profil `cpu-only` : le niveau GPU est normalement 🔴, tout bascule sur le CPU.
+- Profil `cpu-only` : partez du préréglage (`make init PRESET=cpu-only`), qui sert le niveau rapide
+  depuis `llama-cpu`. Avec la config par défaut, le niveau rapide est 🔴 et tout devient une tâche CPU.
+
+## « Message trop long pour gpu_fast »
+
+Le message ne tient pas dans le contexte du modèle rapide (`max_context`) : il est envoyé au niveau
+suivant. Pour des messages longs fréquents, augmentez `ctx_size` du modèle et `max_context` du backend
+(plus de VRAM), ou laissez faire le CPU.
 
 ## Le panneau refuse de démarrer
 

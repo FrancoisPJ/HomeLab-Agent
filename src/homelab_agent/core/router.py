@@ -15,13 +15,15 @@ from homelab_agent.llm.base import LLMBackend
 
 log = logging.getLogger(__name__)
 
-TIER_LABELS = {Tier.GPU: "GPU rapide", Tier.CPU: "CPU lourd", Tier.CLOUD: "cloud"}
+# "gpu" is the fast, synchronous tier; in the cpu-only preset it is served by the CPU.
+TIER_LABELS = {Tier.GPU: "rapide", Tier.CPU: "lourd", Tier.CLOUD: "cloud"}
 
 
 @dataclass(slots=True)
 class RouteDecision:
     tier: Tier
     reason: str
+    prefer: str | None = None  # backend to try first (GPU quality step-up)
 
 
 @dataclass(slots=True)
@@ -41,8 +43,10 @@ class HealthTracker:
         self.last_probe: dict[str, bool] = {}
         self._task: asyncio.Task[None] | None = None
 
-    def mark_down(self, name: str) -> None:
-        self._down_until[name] = self.clock() + self.cooldown_s
+    def mark_down(self, name: str, duration_s: float | None = None) -> None:
+        self._down_until[name] = self.clock() + (
+            self.cooldown_s if duration_s is None else duration_s
+        )
         self.last_probe[name] = False
 
     def mark_up(self, name: str) -> None:
@@ -113,14 +117,28 @@ class Router:
                 return RouteDecision(Tier.CPU, f"keyword '{kw}'")
         if esc.long_message_chars and len(text) > esc.long_message_chars:
             return RouteDecision(Tier.CPU, "long message")
+        quality = self.cfg.routing.gpu_quality
+        if quality.backend:
+            if quality.min_chars and len(text) >= quality.min_chars:
+                return RouteDecision(Tier.GPU, "medium request (length)", quality.backend)
+            for kw in quality.keywords:
+                if kw.casefold() in low:
+                    return RouteDecision(Tier.GPU, f"medium request ('{kw}')", quality.backend)
         return RouteDecision(Tier.GPU, "default")
 
     async def pick(
-        self, tier: Tier, exclude: set[str] | None = None
+        self, tier: Tier, exclude: set[str] | None = None, prefer: str | None = None
     ) -> tuple[LLMBackend | None, str]:
-        """Return the first usable backend of ``tier`` (or None and a reason)."""
+        """Return the first usable backend of ``tier`` (or None and a reason).
+
+        ``prefer`` (the GPU quality backend) is tried first but is never used as a failover.
+        """
         exclude = exclude or set()
         reasons: list[str] = []
+        if prefer and prefer not in exclude:
+            preferred = self.backends.get(prefer)
+            if preferred is not None and preferred.tier == tier and self.health.is_up(prefer):
+                return preferred, ""
         names = self.cfg.backends_for(tier)
         if not names:
             return None, f"aucun backend configuré pour le niveau {TIER_LABELS[tier]}"
@@ -152,8 +170,10 @@ class Router:
                     out.append(order[j])
         return out
 
-    async def resolve(self, tier: Tier, exclude: set[str] | None = None) -> Resolution:
-        backend, why = await self.pick(tier, exclude)
+    async def resolve(
+        self, tier: Tier, exclude: set[str] | None = None, prefer: str | None = None
+    ) -> Resolution:
+        backend, why = await self.pick(tier, exclude, prefer)
         if backend is not None:
             return Resolution(backend, tier)
         notes = [f"{TIER_LABELS[tier]} : {why}"]

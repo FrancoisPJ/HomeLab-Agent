@@ -1,0 +1,163 @@
+# yaml-language-server: $schema=./config.schema.json
+# =============================================================================
+#  homelab-agent — configuration
+#  PRÉRÉGLAGE cpu-only : pas de GPU. Le niveau « rapide » (synchrone) est servi par
+#  un petit modèle sur le CPU, chargé en même temps que le gros modèle.
+#  Copier en config.yaml :  make init PRESET=cpu-only   puis  make up PROFILE=cpu-only
+#  Mémoire : ~2,5 Go (4B) + ~9 Go (14B) → mettez LLAMA_CPU_MEM_LIMIT=14g dans .env.
+#  Les secrets ne vont JAMAIS ici : uniquement dans .env (les champs *_env
+#  contiennent le NOM de la variable d'environnement).
+#  Syntaxe ${VAR} ou ${VAR:-valeur_par_défaut} acceptée dans les chaînes.
+#  Validation :  make check   (ou  homelab-agent check-config)
+# =============================================================================
+
+agent:
+  language: fr                 # langue des réponses
+  timezone: Europe/Paris       # fuseau pour l'heure, le budget journalier/mensuel
+  log_level: info              # debug | info | warning | error
+  log_format: json             # json | text
+  history_messages: 12         # messages de contexte conservés par conversation
+  max_tool_rounds: 6           # aller-retours LLM ↔ outils maximum par réponse
+  # system_prompt: |           # consignes supplémentaires (facultatif)
+  #   Tutoie l'utilisateur.
+
+telegram:
+  enabled: true
+  token_env: TELEGRAM_BOT_TOKEN
+  # Identifiants NUMÉRIQUES autorisés (obtenus via @userinfobot). Les autres
+  # utilisateurs sont ignorés sans réponse (et journalisés).
+  allowed_user_ids: [123456789]
+  stream_edit_interval_s: 1.2  # délai mini entre deux éditions (limites Telegram)
+  confirm_timeout_s: 60        # expiration des boutons Oui/Non
+
+# -----------------------------------------------------------------------------
+#  Moteurs. `tier` = niveau (gpu | cpu | cloud). Pour les moteurs locaux,
+#  `model` doit correspondre à un `name` de la section models.items plus bas.
+# -----------------------------------------------------------------------------
+backends:
+  gpu_fast:                     # niveau « rapide » (tier gpu = synchrone), servi par le CPU
+    kind: openai_compat
+    tier: gpu
+    url: http://llama-cpu:8080/v1
+    model: fast
+    max_context: 4096
+    max_output_tokens: 512
+    timeout_s: 60
+  cpu_heavy:
+    kind: openai_compat
+    tier: cpu
+    url: http://llama-cpu:8080/v1
+    model: heavy
+    max_context: 8192
+    timeout_s: 900
+    max_output_tokens: 2048
+    concurrency: 1
+  claude:
+    kind: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    model: "<à renseigner>"      # identifiant de modèle : voir docs/cloud-budget.md
+    timeout_s: 120
+    max_output_tokens: 2048
+  gemini:
+    kind: gemini
+    api_key_env: GEMINI_API_KEY
+    model: "<à renseigner>"
+    timeout_s: 120
+    max_output_tokens: 2048
+
+routing:
+  fast_path:
+    enabled: true               # commandes triviales sans LLM (allume/éteins…)
+    aliases:                    # nom prononcé → entity_id
+      salon: light.salon
+      # "lumière de la cuisine": light.cuisine
+  gpu_quality:                  # montée en qualité sur GPU (pas un secours : voir docs/gpu-sharing.md)
+    backend: null               # pas de modèle « qualité » sans GPU
+    min_chars: 200              # message assez long → modèle qualité
+    keywords: [pourquoi, comment, explique, conseille]
+    retry_after_s: 300          # si le chargement échoue (VRAM prise), pause avant de réessayer
+  tiers:                        # moteurs de chaque niveau, par ordre de préférence
+    gpu: [gpu_fast]
+    cpu: [cpu_heavy]
+    cloud: [claude, gemini]     # ordre = préférence de fournisseur
+  escalation:
+    to_cpu_keywords: [analyse, résume, rédige, compare, "explique en détail"]
+    to_cloud_keywords: [urgent, "très complexe"]
+    long_message_chars: 600     # au-delà → CPU (0 = désactivé)
+    max_tool_failures: 2        # échecs d'outils avant de passer la main
+    allow_model_escalation: true
+  fallback_order: [gpu, cpu, cloud]   # niveau voisin essayé si l'un tombe
+  health_interval_s: 30
+  unhealthy_cooldown_s: 30
+
+jobs:
+  max_concurrent: 1             # un seul job lourd à la fois
+  max_attempts: 2
+
+cloud:
+  enabled: false                # défaut : aucun appel payant
+  # Tarifs en EUR par million de jetons, À RECOPIER depuis les pages officielles
+  # (ils changent). Clés = noms des backends.
+  pricing:
+    claude: { in_per_mtok: 0, out_per_mtok: 0 }
+    gemini: { in_per_mtok: 0, out_per_mtok: 0 }
+  limits:
+    monthly_eur: 0              # 0 = rien n'est autorisé
+    daily_eur: 0
+    alert_at: 0.8               # alerte Telegram à 80 % d'un plafond
+    per_provider: {}
+    #   claude: { monthly_eur: 5, daily_eur: 1 }
+
+home_assistant:
+  enabled: true
+  url: http://homeassistant.local:8123
+  token_env: HA_TOKEN           # token longue durée (profil HA → Sécurité)
+  verify_ssl: true
+  default_policy: allow         # allow | read_only | deny
+  rules: []                     # voir docs/home-assistant.md, par exemple :
+  #  - { domain: lock, mode: read_only }
+  #  - { area: garage, mode: deny }
+  #  - { entity: "switch.serveur_*", mode: deny }
+  #  - { domain: cover, mode: allow, confirm: true }
+  confirm: []                   # confirmation Oui/Non obligatoire, ex. :
+  #  - { domain: lock }
+  #  - { domain: alarm_control_panel }
+  context_max_chars: 3000       # taille max du résumé d'entités envoyé au LLM
+
+web:
+  enabled: true
+  bind: 127.0.0.1               # jamais exposé publiquement par défaut
+  port: 8099
+  password_env: PANEL_PASSWORD  # le panneau refuse de démarrer sans
+
+# -----------------------------------------------------------------------------
+#  Modèles GGUF servis par llama.cpp (via llama-swap). C'est ICI qu'on choisit
+#  les modèles. Après modification :  make engines models  puis  make restart.
+#  Candidats et méthode de choix : docs/models.md. À valider avec scripts/bench.py.
+# -----------------------------------------------------------------------------
+models:
+  dir: ./models
+  gpu:
+    default_threads: 4
+  cpu:
+    default_threads: 8          # i9-10850K : 10 cœurs physiques
+    swap: false                 # fast et heavy chargés ensemble (pas de rechargement à chaque niveau)
+  items:
+    - name: fast                # rapide sur CPU, ~2,5 Go de RAM
+      engine: cpu
+      repo: Qwen/Qwen3-4B-GGUF
+      file: Qwen3-4B-Q4_K_M.gguf
+      sha256: 7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5
+      ctx_size: 4096
+      threads: 6
+    - name: heavy               # lourd sur CPU, ~9 Go de RAM
+      engine: cpu
+      repo: Qwen/Qwen3-14B-GGUF
+      file: Qwen3-14B-Q4_K_M.gguf
+      sha256: 500a8806e85ee9c83f3ae08420295592451379b4f8cf2d0f41c15dffeb6b81f0
+      ctx_size: 8192
+      threads: 8
+      ttl_s: 1800
+
+store:
+  path: ./data/agent.db

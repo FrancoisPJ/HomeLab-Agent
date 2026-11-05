@@ -9,7 +9,8 @@ Directives inside the last user message drive its behaviour:
 
 Without directive, natural French home commands ("éteins la lumière du salon") are mapped to
 ``ha_call_service`` when the entity id appears in the system prompt. Otherwise it echoes.
-``POST /_control`` with ``{"fail": true}`` or ``{"delay": 1.0}`` simulates outages.
+``POST /_control`` with ``{"fail": true}``, ``{"delay": 1.0}`` or ``{"n_ctx": 512}`` simulates
+outages, slowness or a small context window (HTTP 400, like llama-server).
 """
 
 from __future__ import annotations
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     state: dict[str, Any] = {
         "fail": os.environ.get("FAKE_LLM_FAIL") == "1",
         "delay": float(os.environ.get("FAKE_LLM_DELAY", "0")),
+        "n_ctx": int(os.environ.get("FAKE_LLM_N_CTX", "0")),  # 0 = unlimited
         "requests": 0,
     }
 
@@ -131,6 +133,14 @@ def create_app() -> FastAPI:
         body = await request.json()
         if state["fail"]:
             return JSONResponse({"error": {"message": "simulated outage"}}, status_code=503)
+        if state["n_ctx"]:
+            prompt = sum(len(str(m.get("content") or "")) // 4 + 4 for m in body["messages"])
+            if prompt + int(body.get("max_tokens") or 0) > state["n_ctx"]:
+                return JSONResponse(
+                    {"error": {"code": 400, "type": "exceed_context_size_error",
+                               "message": "the request exceeds the available context size"}},
+                    status_code=400,
+                )  # fmt: skip
         d = decide(body)
         delay = d["sleep"] + float(state["delay"])
         if delay:

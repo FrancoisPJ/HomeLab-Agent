@@ -16,7 +16,7 @@ docker run --rm --gpus all nvidia/cuda:12.2.2-base-ubuntu22.04 nvidia-smi
 
 ```bash
 git clone https://github.com/FrancoisPJ/HomeLab-Agent.git && cd HomeLab-Agent
-make init
+make init                     # ou : make init PRESET=cpu-only  (machine sans GPU)
 ```
 
 Éditez `.env` (tokens, `PANEL_PASSWORD`, `HLA_UID`/`HLA_GID` si votre uid n'est pas 1000) et
@@ -60,7 +60,7 @@ par vous :
       libérée.
 - [ ] **Latence « éteins la lumière »** : avec un alias (chemin rapide) < 1 s ; via le modèle GPU
       chargé, quelques secondes au plus. Notez les valeurs.
-- [ ] `scripts/bench.py` sur `fast`, `fallback` et `heavy` : jetons/s et score d'appel d'outils notés.
+- [ ] `scripts/bench.py` sur `fast`, `quality` et `heavy` : jetons/s et score d'appel d'outils notés.
 - [ ] **Job CPU long** : `/deep rédige un résumé de …` → accusé immédiat puis réponse ; redémarrez
       l'agent pendant le job (`docker compose restart agent`) : la réponse arrive quand même.
 - [ ] **Confirmation Telegram** : activez la confirmation sur `lock` dans le panneau, demandez de

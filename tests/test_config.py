@@ -25,7 +25,8 @@ def test_example_config_is_valid() -> None:
     assert cfg.home_assistant.default_policy == Policy.ALLOW
     assert cfg.home_assistant.confirm == []
     assert cfg.web.bind == "127.0.0.1"
-    assert cfg.backends_for(Tier.GPU) == ["gpu_fast", "gpu_fallback"]
+    assert cfg.backends_for(Tier.GPU) == ["gpu_fast"]
+    assert cfg.routing.gpu_quality.backend == "gpu_quality"
 
 
 def test_dev_config_is_valid() -> None:

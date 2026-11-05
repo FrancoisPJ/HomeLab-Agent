@@ -116,8 +116,30 @@ class FastPathSection(_Base):
     )
 
 
+class GpuQualitySection(_Base):
+    """Step up to a bigger GPU model for medium requests, when it can be loaded.
+
+    The quality backend is *not* a failover: if it cannot be loaded (VRAM taken by another
+    process, e.g. a Jellyfin transcode), the request goes back to the fast GPU model and the
+    quality model is left alone for ``retry_after_s``.
+    """
+
+    backend: str | None = Field(None, description="Backend (tier gpu) used for medium requests.")
+    min_chars: int = Field(
+        200, ge=0, description="Messages at least this long are medium (0 = length ignored)."
+    )
+    keywords: list[str] = Field(
+        default_factory=lambda: ["pourquoi", "comment", "explique", "conseille"],
+        description="Messages containing one of these words are medium.",
+    )
+    retry_after_s: int = Field(
+        300, ge=10, description="Pause after a failed load before trying the quality model again."
+    )
+
+
 class RoutingSection(_Base):
     fast_path: FastPathSection = Field(default_factory=FastPathSection)
+    gpu_quality: GpuQualitySection = Field(default_factory=GpuQualitySection)
     tiers: dict[Tier, list[str]] = Field(
         default_factory=lambda: {
             Tier.GPU: ["gpu_fast"],
@@ -255,6 +277,11 @@ class ModelItem(_Base):
 class EngineSettings(_Base):
     default_threads: int = Field(8, ge=1)
     health_timeout_s: int = Field(300, ge=10)
+    swap: bool = Field(
+        True,
+        description="One model loaded at a time (true). false keeps every model of this engine "
+        "loaded together (e.g. fast + heavy on CPU in the cpu-only preset): mind the RAM.",
+    )
 
 
 class ModelsSection(_Base):
@@ -297,6 +324,13 @@ class AppConfig(_Base):
                         f"backend '{name}' has tier '{backend.tier.value}' but is listed "
                         f"under routing.tiers.{tier.value}"
                     )
+        quality = self.routing.gpu_quality.backend
+        if quality is not None:
+            qb = self.backends.get(quality)
+            if qb is None:
+                raise ValueError(f"routing.gpu_quality.backend: unknown backend '{quality}'")
+            if qb.tier != Tier.GPU:
+                raise ValueError(f"routing.gpu_quality.backend '{quality}' must have tier 'gpu'")
         for name in self.cloud.pricing:
             if name not in self.backends:
                 raise ValueError(f"cloud.pricing references unknown backend '{name}'")
