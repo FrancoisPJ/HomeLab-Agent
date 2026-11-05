@@ -95,3 +95,37 @@ def test_message_conversion() -> None:
     out = to_openai_messages(msgs)
     assert out[1]["tool_calls"][0]["function"]["arguments"] == '{"a": 1}'
     assert out[2]["tool_call_id"] == "c1"
+
+
+def test_stream_assembler_rebuilds_split_tool_calls() -> None:
+    from homelab_agent.llm.base import Message
+    from homelab_agent.llm.openai_compat import _DONE, StreamAssembler, parse_sse_line
+
+    assert parse_sse_line(": keep-alive") is None
+    assert parse_sse_line("data: [DONE]") is _DONE
+    assert parse_sse_line("data: {oops") is None
+    assert parse_sse_line("data: [1, 2]") is None
+    a = StreamAssembler("default")
+    chunks = [
+        {"model": "fast", "choices": [{"delta": {"content": "Je "}}]},
+        {"choices": [{"delta": {"content": "regarde.", "tool_calls": [
+            {"index": 0, "id": "c1", "function": {"name": "ha_get", "arguments": '{"entity'}}]}}]},
+        {"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "function": {"name": "_state", "arguments": '_id": "light.salon"}'}},
+            {"index": 1, "function": {"name": "escalate", "arguments": ""}}]}}]},
+        {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]},
+    ]  # fmt: skip
+    pieces = [p for c in chunks for p in a.feed(c)]
+    assert pieces == ["Je ", "regarde."]
+    r = a.result([Message("user", "allume")])
+    assert r.content == "Je regarde." and r.model == "fast" and r.finish_reason == "tool_calls"
+    first = r.tool_calls[0]
+    assert (first.id, first.name, first.arguments) == (
+        "c1",
+        "ha_get_state",
+        {"entity_id": "light.salon"},
+    )
+    assert r.tool_calls[1].id.startswith("call_") and r.tool_calls[1].arguments == {}
+    assert r.usage.input_tokens > 0  # no usage from the server: estimated
+    a.feed({"usage": {"prompt_tokens": 12, "completion_tokens": 3}, "choices": []})
+    assert (a.result([]).usage.input_tokens, a.result([]).usage.output_tokens) == (12, 3)

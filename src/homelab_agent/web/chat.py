@@ -13,11 +13,10 @@ import itertools
 import json
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from homelab_agent.config.models import Tier
 from homelab_agent.gateway.base import (
     ActionButton,
     IncomingMessage,
@@ -25,9 +24,11 @@ from homelab_agent.gateway.base import (
     Replier,
     StreamHandle,
 )
+from homelab_agent.gateway.commands import CommandTable
 
 WEB_PREFIX = "web:"
 WEB_CHAT = "web:panel"
+WEB_USER = "panel"
 Event = dict[str, Any]
 Emit = Callable[[Event], None]
 
@@ -138,19 +139,28 @@ class WebChatHub:
         entry = self.actions.pop(token, None)
         if entry is None or entry[1] < time.monotonic():
             return "Bouton expiré."
-        return await entry[0].run("panel", WebReplier(self, self.broadcast))
+        return await entry[0].run(WEB_USER, WebReplier(self, self.broadcast))
 
     # ---------------------------------------------------------------- turns
-    def start_turn(self, text: str, handler: Callable[[IncomingMessage, Replier], Any]) -> Turn:
+    def start_turn(
+        self,
+        text: str,
+        handler: Callable[[IncomingMessage, Replier], Awaitable[None]],
+        commands: CommandTable | None = None,
+    ) -> Turn:
         now = time.monotonic()
         self.turns = {k: t for k, t in self.turns.items() if now - t.created < 3600}
         turn = Turn(uuid.uuid4().hex[:12])
         self.turns[turn.id] = turn
-        msg = parse_message(text)
+        text = text.strip()
+        table = commands if commands is not None else CommandTable()
 
         async def run() -> None:
+            replier = WebReplier(self, turn.queue.put_nowait)
             try:
-                await handler(msg, WebReplier(self, turn.queue.put_nowait))
+                # same /commands as on Telegram (/status, /routines, /cloud…)
+                if not await table.handle(text, WEB_CHAT, WEB_USER, replier, handler):
+                    await handler(IncomingMessage(WEB_USER, WEB_CHAT, text), replier)
             except Exception:
                 turn.queue.put_nowait(
                     {"type": "message", "id": self.next_id(), "text": "❌ Erreur interne."}
@@ -169,15 +179,6 @@ class WebChatHub:
             return False
         fut.set_result(yes)
         return True
-
-
-def parse_message(text: str) -> IncomingMessage:
-    text = text.strip()
-    forced: Tier | None = None
-    for prefix, tier in (("/cloud ", Tier.CLOUD), ("/deep ", Tier.CPU)):
-        if text.startswith(prefix):
-            forced, text = tier, text[len(prefix) :].strip()
-    return IncomingMessage("panel", WEB_CHAT, text, forced_tier=forced)
 
 
 def sse(event: Event) -> str:

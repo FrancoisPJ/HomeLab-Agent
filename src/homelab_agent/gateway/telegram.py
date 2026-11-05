@@ -13,8 +13,9 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
-from homelab_agent.config.models import TelegramSection, Tier, VoiceSection
+from homelab_agent.config.models import TelegramSection, VoiceSection
 from homelab_agent.gateway.base import ActionButton, IncomingMessage, Replier, StreamHandle
+from homelab_agent.gateway.commands import CommandTable
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.voice.stt import SpeechToText, STTError
 from homelab_agent.voice.tts import TextToSpeech, TTSError, speakable
@@ -69,17 +70,6 @@ def split_text(text: str, limit: int) -> list[str]:
     if rest:
         chunks.append(rest)
     return chunks
-
-
-HELP_TEXT = """Commandes :
-/status – état des moteurs et du budget
-/model – moteurs et modèles configurés
-/cloud <texte> – forcer le cloud
-/deep <texte> – forcer le CPU (réponse différée)
-/jobs – tâches en cours
-/reset – oublier la conversation
-/help – cette aide
-Sinon, écris simplement ta demande."""
 
 
 class StreamEditor:
@@ -201,11 +191,6 @@ class TelegramReplier:
 
 
 Handler = Callable[[IncomingMessage, Replier], Awaitable[None]]
-TextProvider = Callable[[], Awaitable[str]]
-ChatAction = Callable[[str], Awaitable[str]]
-#: extra command: (description, fn(chat_id, argument) -> reply text)
-#: (returning None means the command already replied by itself)
-ChatCommand = tuple[str, Callable[[str, str], Awaitable[str | None]]]
 #: callback handler: (user_id, chat_id, message_id, payload, callback_id)
 CallbackHandler = Callable[[str, str, int | None, str, str], Awaitable[None]]
 
@@ -217,11 +202,7 @@ class TelegramFrontend:
         get_section: Callable[[], TelegramSection],
         handler: Handler,
         *,
-        status_text: TextProvider,
-        model_text: TextProvider,
-        jobs_text: ChatAction,
-        reset_chat: ChatAction,
-        commands: dict[str, ChatCommand] | None = None,
+        commands: CommandTable | None = None,
         voice: Callable[[], VoiceSection] | None = None,
         stt: SpeechToText | None = None,
         tts: TextToSpeech | None = None,
@@ -230,12 +211,9 @@ class TelegramFrontend:
         self.api = api
         self.cfg = get_section
         self.handler = handler
-        self.status_text = status_text
-        self.model_text = model_text
-        self.jobs_text = jobs_text
-        self.reset_chat = reset_chat
         self.clock = clock
-        self.commands = commands or {}
+        # own copy: Telegram-only commands (/maison) must not leak into other gateways
+        self.commands = commands.copy() if commands is not None else CommandTable()
         self.voice = voice
         self.stt = stt
         self.tts = tts
@@ -244,9 +222,7 @@ class TelegramFrontend:
         self.callbacks: dict[str, CallbackHandler] = {}  # prefix -> handler (e.g. "hm")
 
     def help_text(self) -> str:
-        extra = "".join(f"\n/{name} – {desc}" for name, (desc, _) in sorted(self.commands.items()))
-        head, _, tail = HELP_TEXT.partition("\n/help")
-        return head + extra + "\n/help" + tail
+        return self.commands.help_text()
 
     # ------------------------------------------------------------- notifier
     async def notify(self, chat_id: str, text: str) -> None:
@@ -284,38 +260,7 @@ class TelegramFrontend:
         chat = str(chat_id)
         replier = TelegramReplier(self, chat, str(user_id))
         text = (text or "").strip()
-        if not text:
-            return
-        if text.startswith("/"):
-            cmd, _, arg = text.partition(" ")
-            cmd = cmd.split("@", 1)[0].lower()
-            arg = arg.strip()
-            if cmd in ("/start", "/help"):
-                await replier.send(self.help_text())
-            elif cmd == "/status":
-                await replier.send(await self.status_text())
-            elif cmd == "/model":
-                await replier.send(await self.model_text())
-            elif cmd == "/jobs":
-                await replier.send(await self.jobs_text(chat))
-            elif cmd == "/reset":
-                await replier.send(await self.reset_chat(chat))
-            elif cmd in ("/cloud", "/deep"):
-                if not arg:
-                    await replier.send(f"Usage : {cmd} <ta demande>")
-                    return
-                tier = Tier.CLOUD if cmd == "/cloud" else Tier.CPU
-                await self._run(IncomingMessage(str(user_id), chat, arg, tier), replier)
-            elif cmd[1:] in self.commands:
-                try:
-                    reply = await self.commands[cmd[1:]][1](chat, arg)
-                    if reply is not None:
-                        await replier.send(reply)
-                except Exception:
-                    log.exception("command %s failed", cmd)
-                    await replier.send("❌ Erreur interne, voir les journaux.")
-            else:
-                await replier.send("Commande inconnue. /help pour la liste.")
+        if not text or await self.commands.handle(text, chat, str(user_id), replier, self._run):
             return
         await self._run_and_speak(IncomingMessage(str(user_id), chat, text), replier, spoke=False)
 

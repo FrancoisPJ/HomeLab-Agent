@@ -29,6 +29,19 @@ class ToolContext:
     escalation: dict[str, str] | None = None  # set by the `escalate` tool
     notify: Callable[[str], Awaitable[None]] | None = None  # tell the user something now
 
+    @classmethod
+    def for_command(
+        cls,
+        requester: str,
+        confirm: ConfirmFn,
+        *,
+        chat_id: str | None = None,
+        tier: str = "command",
+    ) -> ToolContext:
+        """Context of an action started without a model (command, button, fast path)."""
+        return cls(requester=requester, chat_id=chat_id or requester, tier=tier, model="-",
+                   confirm=confirm)  # fmt: skip
+
 
 @dataclass(slots=True)
 class ToolResult:

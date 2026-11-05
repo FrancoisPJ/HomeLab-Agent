@@ -7,7 +7,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from homelab_agent.config.models import AppConfig, Tier
 from homelab_agent.core import fastpath
@@ -28,8 +28,10 @@ from homelab_agent.llm.base import (
     ContextOverflow,
     LLMBackend,
     Message,
+    Role,
     StreamDelta,
     StreamDone,
+    ToolCall,
     ToolSpec,
     Usage,
     budget_tokens,
@@ -37,7 +39,7 @@ from homelab_agent.llm.base import (
 from homelab_agent.observability.logging import log_fields
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.store.db import Database
-from homelab_agent.tools.registry import ESCALATE_TOOL_NAME, ToolContext, ToolRegistry
+from homelab_agent.tools.registry import ESCALATE_TOOL_NAME, ConfirmFn, ToolContext, ToolRegistry
 
 if TYPE_CHECKING:
     from homelab_agent.core.jobs import JobQueue
@@ -45,6 +47,9 @@ if TYPE_CHECKING:
     from homelab_agent.tools.homeassistant.tools import HomeAssistantService
 
 log = logging.getLogger(__name__)
+
+#: retries, escalations and fallbacks for one message, together
+MAX_HOPS = 3
 
 
 @dataclass(slots=True)
@@ -157,6 +162,7 @@ class Orchestrator:
         depth: int = 0,
         prefer: str | None = None,
     ) -> None:
+        """Pick a backend for ``tier`` and answer; on failure, retry elsewhere (bounded)."""
         res = await self.router.resolve(tier, exclude, prefer)
         notes = notes + res.notes
         if res.backend is None or res.tier is None:
@@ -170,6 +176,7 @@ class Orchestrator:
             return
         if notes:
             await replier.send("ℹ️ " + " ".join(notes))
+        tried = exclude | {backend.name}
         start = time.monotonic()
         try:
             outcome = await self.run_agent(
@@ -178,12 +185,9 @@ class Orchestrator:
         except ContextOverflow as exc:
             # the backend is healthy, the prompt is just too big for it: try a bigger one
             log.warning("context overflow: %s", exc)
-            if depth >= 3:
-                await replier.send("❌ Message trop long pour les moteurs disponibles.")
-                return
-            await self._dispatch(
-                msg, replier, tier, exclude | {backend.name},
-                [f"Message trop long pour {backend.name}."], depth + 1,
+            await self._retry(
+                msg, replier, tier, tried, f"Message trop long pour {backend.name}.", depth,
+                give_up="❌ Message trop long pour les moteurs disponibles.",
             )  # fmt: skip
             return
         except BackendUnavailable as exc:
@@ -194,15 +198,12 @@ class Orchestrator:
                 self.router.health.mark_down(
                     backend.name, self.cfg.routing.gpu_quality.retry_after_s
                 )
-                await self._dispatch(msg, replier, tier, exclude | {backend.name}, notes, depth + 1)
+                await self._dispatch(msg, replier, tier, tried, notes, depth + 1)
                 return
             self.router.health.mark_down(backend.name)
-            if depth >= 3:
-                await replier.send(f"❌ {exc}")
-                return
-            await self._dispatch(
-                msg, replier, tier, exclude | {backend.name},
-                [f"{backend.name} ne répond pas."], depth + 1,
+            await self._retry(
+                msg, replier, tier, tried, f"{backend.name} ne répond pas.", depth,
+                give_up=f"❌ {exc}",
             )  # fmt: skip
             return
         except BackendError as exc:
@@ -210,25 +211,38 @@ class Orchestrator:
             await replier.send(f"❌ Erreur du moteur {backend.name}.")
             return
         await self._account(msg.chat_id, backend, tier, outcome.usage, start, replier)
+        if not await self._hand_over(msg, replier, tier, exclude, outcome, depth) and outcome.text:
+            await self.db.add_message(msg.chat_id, "assistant", outcome.history_text())
 
-        if outcome.escalation and depth < 3:
+    async def _retry(
+        self, msg: IncomingMessage, replier: Replier, tier: Tier, exclude: set[str],
+        note: str, depth: int, *, give_up: str,
+    ) -> None:  # fmt: skip
+        if depth >= MAX_HOPS:
+            await replier.send(give_up)
+            return
+        await self._dispatch(msg, replier, tier, exclude, [note], depth + 1)
+
+    async def _hand_over(
+        self, msg: IncomingMessage, replier: Replier, tier: Tier, exclude: set[str],
+        outcome: AgentOutcome, depth: int,
+    ) -> bool:  # fmt: skip
+        """Escalation asked by the model, or repeated tool failures: pass to another tier."""
+        if depth >= MAX_HOPS:
+            return False
+        if outcome.escalation:
             target = Tier(outcome.escalation["target"])
             reason = outcome.escalation.get("reason") or "demande du modèle"
-            await self._dispatch(
-                msg, replier, target, exclude,
-                [f"Escalade vers {TIER_LABELS[target]} ({reason})."], depth + 1,
-            )  # fmt: skip
-            return
-        if not outcome.finished and depth < 3:
+            note = f"Escalade vers {TIER_LABELS[target]} ({reason})."
+        elif not outcome.finished:
             nxt = next((t for t in self.router.neighbours(tier) if t != Tier.GPU), None)
-            if nxt is not None:
-                await self._dispatch(
-                    msg, replier, nxt, exclude,
-                    ["Échecs d'outils répétés, je passe la main."], depth + 1,
-                )  # fmt: skip
-                return
-        if outcome.text:
-            await self.db.add_message(msg.chat_id, "assistant", outcome.history_text())
+            if nxt is None:
+                return False
+            target, note = nxt, "Échecs d'outils répétés, je passe la main."
+        else:
+            return False
+        await self._dispatch(msg, replier, target, exclude, [note], depth + 1)
+        return True
 
     async def _account(
         self,
@@ -282,9 +296,8 @@ class Orchestrator:
         if history_rows and history_rows[-1].role == "user" and history_rows[-1].content == text:
             history_rows = history_rows[:-1]
         history = [
-            Message(h.role, h.content)  # type: ignore[arg-type]
+            Message(cast("Role", h.role), h.content)
             for h in history_rows[-cfg.agent.history_messages :]
-            if history_rows
             if h.role in ("user", "assistant")
         ]
         user = Message("user", text)
@@ -318,16 +331,8 @@ class Orchestrator:
             )
         return messages
 
-    async def run_agent(
-        self,
-        backend: LLMBackend,
-        tier: Tier,
-        msg: IncomingMessage,
-        stream: StreamHandle | None = None,
-        confirm: Callable[[str], object] | None = None,
-        notify: Callable[[str], Awaitable[None]] | None = None,
-    ) -> AgentOutcome:
-        stream = stream or _NullStream()
+    def _excluded_tags(self, tier: Tier, msg: IncomingMessage) -> set[str]:
+        """Tool families the model must not see for this message."""
         cfg = self.cfg
         exclude = set()
         if tier != Tier.GPU or not cfg.routing.escalation.allow_model_escalation:
@@ -339,28 +344,31 @@ class Orchestrator:
         if self.memory is None or not cfg.memory.enabled:
             exclude.add("memory")
         elif msg.origin != "user":
-            exclude.add("memory_edit")
-        tools = self.registry.specs(exclude_tags=exclude)
+            exclude.add("memory_edit")  # a routine or an alert never writes memories
+        return exclude
+
+    async def run_agent(
+        self,
+        backend: LLMBackend,
+        tier: Tier,
+        msg: IncomingMessage,
+        stream: StreamHandle | None = None,
+        confirm: ConfirmFn | None = None,
+        notify: Callable[[str], Awaitable[None]] | None = None,
+    ) -> AgentOutcome:
+        """Model ↔ tools rounds until a final answer, an escalation or too many failures."""
+        stream = stream or _NullStream()
+        tools = self.registry.specs(exclude_tags=self._excluded_tags(tier, msg))
         messages = await self.build_messages(msg.chat_id, tier, msg.text, backend, tools)
         ctx = ToolContext(
-            requester=msg.user_id, chat_id=msg.chat_id, tier=tier.value, model=backend.model
-        )
+            requester=msg.user_id, chat_id=msg.chat_id, tier=tier.value, model=backend.model,
+            notify=notify,
+        )  # fmt: skip
         if confirm is not None:
-            ctx.confirm = confirm  # type: ignore[assignment]
-        ctx.notify = notify
+            ctx.confirm = confirm
         outcome = AgentOutcome()
-        max_failures = cfg.routing.escalation.max_tool_failures
-        for _ in range(cfg.agent.max_tool_rounds):
-            buffer = ""
-            result: ChatResult | None = None
-            async for ev in backend.stream(messages, tools or None):
-                if isinstance(ev, StreamDelta):
-                    buffer += ev.text
-                    await stream.update(buffer)
-                elif isinstance(ev, StreamDone):
-                    result = ev.result
-            if result is None:
-                raise BackendError(f"{backend.name}: stream ended without result")
+        for _ in range(self.cfg.agent.max_tool_rounds):
+            result = await self._complete(backend, messages, tools, stream)
             outcome.usage = outcome.usage + result.usage
             if not result.tool_calls:
                 outcome.text = result.content.strip() or "(réponse vide)"
@@ -368,31 +376,60 @@ class Orchestrator:
                 await stream.finish(outcome.text)
                 return outcome
             messages.append(Message("assistant", result.content, tool_calls=result.tool_calls))
-            for call in result.tool_calls:
-                tool = self.registry.get(call.name)
-                r = await self.registry.execute(call.name, call.arguments, ctx)
-                METRICS.inc("tool_calls_total", tool=call.name, outcome=r.outcome)
-                if tool is None or "action" not in tool.tags:
-                    await self.db.audit(
-                        requester=ctx.requester, tier=ctx.tier, model=ctx.model, tool=call.name,
-                        params=call.arguments, outcome=r.outcome, detail=r.error or "",
-                    )  # fmt: skip
-                if call.name == ESCALATE_TOOL_NAME and ctx.escalation:
-                    outcome.escalation = ctx.escalation
-                    await stream.finish("↗️ Je transmets à un modèle plus puissant…")
-                    return outcome
-                if not r.ok and r.outcome == "error":
-                    outcome.tool_failures += 1
-                if r.ok and tool is not None and "action" in tool.tags:
-                    outcome.actions.append(f"{call.name} {call.arguments_json()}"[:200])
-                messages.append(Message("tool", r.to_text(), tool_call_id=call.id, name=call.name))
-            if outcome.tool_failures >= max_failures and tier == Tier.GPU:
+            if await self._run_tools(result.tool_calls, ctx, messages, outcome):
+                await stream.finish("↗️ Je transmets à un modèle plus puissant…")
+                return outcome
+            if outcome.tool_failures >= self.cfg.routing.escalation.max_tool_failures and (
+                tier == Tier.GPU
+            ):
                 await stream.finish("⚠️ Les outils échouent, je passe la main…")
                 return outcome
         outcome.text = "⚠️ Limite d'étapes atteinte sans réponse finale."
         outcome.finished = True
         await stream.finish(outcome.text)
         return outcome
+
+    @staticmethod
+    async def _complete(
+        backend: LLMBackend, messages: list[Message], tools: list[ToolSpec], stream: StreamHandle
+    ) -> ChatResult:
+        """One model call, streamed to the user as it is written."""
+        buffer = ""
+        result: ChatResult | None = None
+        async for ev in backend.stream(messages, tools or None):
+            if isinstance(ev, StreamDelta):
+                buffer += ev.text
+                await stream.update(buffer)
+            elif isinstance(ev, StreamDone):
+                result = ev.result
+        if result is None:
+            raise BackendError(f"{backend.name}: stream ended without result")
+        return result
+
+    async def _run_tools(
+        self, calls: list[ToolCall], ctx: ToolContext, messages: list[Message],
+        outcome: AgentOutcome,
+    ) -> bool:  # fmt: skip
+        """Execute the calls of one round; True when the model asked to escalate."""
+        for call in calls:
+            tool = self.registry.get(call.name)
+            is_action = tool is not None and "action" in tool.tags
+            r = await self.registry.execute(call.name, call.arguments, ctx)
+            METRICS.inc("tool_calls_total", tool=call.name, outcome=r.outcome)
+            if not is_action:  # actions are audited by the Home Assistant service itself
+                await self.db.audit(
+                    requester=ctx.requester, tier=ctx.tier, model=ctx.model, tool=call.name,
+                    params=call.arguments, outcome=r.outcome, detail=r.error or "",
+                )  # fmt: skip
+            if call.name == ESCALATE_TOOL_NAME and ctx.escalation:
+                outcome.escalation = ctx.escalation
+                return True
+            if not r.ok and r.outcome == "error":
+                outcome.tool_failures += 1
+            if r.ok and is_action:
+                outcome.actions.append(f"{call.name} {call.arguments_json()}"[:200])
+            messages.append(Message("tool", r.to_text(), tool_call_id=call.id, name=call.name))
+        return False
 
     # ------------------------------------------------------------- CPU jobs
     async def run_job(self, chat_id: str, user_id: str, prompt: str, replier: Replier) -> str:

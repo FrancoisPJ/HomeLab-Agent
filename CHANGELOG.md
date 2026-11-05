@@ -24,7 +24,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
   pages secondaires dans la palette.
 - `web.grafana_url` : lien Grafana dans la barre du panneau.
 
+- Le **chat du panneau comprend les mêmes commandes que Telegram** (`/status`, `/routines`,
+  `/memoire`, `/annuler`, `/help`…) : une seule table de commandes pour les deux passerelles.
+
 ### Modifié
+- **Qualité du code** (sans changement de comportement) : le panneau web est découpé en un module
+  par page (`web/routes/`), les fonctions longues de l'orchestrateur, de l'action Home Assistant,
+  du flux de streaming et du démarrage sont découpées en étapes nommées et testées ; complexité
+  plafonnée par ruff (`C90`, 13 au plus) ; couverture des tests de 87 % à 91 %.
+- Une valeur invalide envoyée au panneau (politique de permission, action de routine) renvoie une
+  erreur 400/422 au lieu d'une erreur serveur 500 ; le limiteur de connexions oublie les anciens
+  essais au lieu de grossir indéfiniment.
 - `make init` génère `PANEL_PASSWORD`, `METRICS_TOKEN` et `GRAFANA_ADMIN_PASSWORD` au hasard dans le
   nouveau `.env` (jamais les valeurs déjà saisies) et le passe en `chmod 600`.
 - CI : vérifie aussi le JSON Grafana et le fichier Compose avec tous les profils.

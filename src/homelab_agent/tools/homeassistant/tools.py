@@ -16,7 +16,7 @@ from homelab_agent.tools.homeassistant.client import (
     HomeAssistantClient,
     sanitize_label,
 )
-from homelab_agent.tools.homeassistant.permissions import PermissionEngine
+from homelab_agent.tools.homeassistant.permissions import Decision, PermissionEngine
 from homelab_agent.tools.homeassistant.undo import (
     REVERSIBLE,
     UndoRecord,
@@ -187,14 +187,45 @@ class HomeAssistantService:
         area_ids: list[str],
         record_undo: bool = True,
     ) -> ToolResult:
+        """Every check happens here, in this order, before Home Assistant is called."""
+        refusal = self._check_call(domain, service, entity_ids, data)
+        if refusal is not None:
+            return refusal
+        targets = self._resolve_targets(entity_ids, area_ids)
+        refusal = self._check_targets(domain, service, targets, area_ids)
+        if refusal is not None:
+            return refusal
+        decisions = self._decisions(domain, targets)
+        refusal = self._check_decisions(decisions) or await self._confirm(
+            ctx, domain, service, decisions
+        )
+        if refusal is not None:
+            return refusal
+        payload = {**data, "entity_id": targets} if targets else dict(data)
+        previous = self._reversible_states(targets)
+        try:
+            changed = await self.client.call_service(domain, service, payload)
+        except HAError as exc:
+            return ToolResult(False, error=str(exc))
+        for state in changed:
+            self.client.cache.apply_state(state)
+        if record_undo and previous:
+            self.undo.push(
+                ctx.chat_id, UndoRecord(f"{domain}.{service}", previous, time.monotonic())
+            )
+        return ToolResult(True, data={"called": f"{domain}.{service}", "targets": targets or None})
+
+    def _check_call(
+        self, domain: str, service: str, entity_ids: list[str], data: dict[str, Any]
+    ) -> ToolResult | None:
+        """Well-formed names, targets only in the checked parameters, no blocked service."""
         if not (_NAME_RE.match(domain) and _NAME_RE.match(service)):
             return ToolResult(False, error="invalid domain or service name")
         bad = [e for e in entity_ids if not _ENTITY_RE.match(e)]
         if bad:
             return ToolResult(False, error=f"invalid entity_id: {bad}")
-        data = dict(data)
         for key in ("entity_id", "area_id", "device_id"):
-            if key in data:  # targets must go through the explicit, checked parameters
+            if key in data:
                 return ToolResult(False, error=f"put '{key}' in the target parameters, not in data")
         section = self.section
         full = f"{domain}.{service}"
@@ -204,53 +235,57 @@ class HomeAssistantService:
             return ToolResult(
                 False, error=f"permission denied: {full} is a blocked service", outcome="denied"
             )
-        targets = self._resolve_targets(entity_ids, area_ids)
+        return None
+
+    def _check_targets(
+        self, domain: str, service: str, targets: list[str], area_ids: list[str]
+    ) -> ToolResult | None:
         if area_ids and not targets:
             return ToolResult(False, error=f"no entity found in area(s) {area_ids}")
-        if not targets and domain not in section.untargeted_domains:
+        if not targets and domain not in self.section.untargeted_domains:
             return ToolResult(
                 False,
-                error=f"{full} needs explicit entity_id targets (untargeted calls are refused)",
+                error=f"{domain}.{service} needs explicit entity_id targets "
+                "(untargeted calls are refused)",
             )
+        return None
+
+    def _decisions(self, domain: str, targets: list[str]) -> dict[str, Decision]:
         if targets:
-            decisions = {
+            return {
                 e: self.permissions.evaluate(e, "control", areas=self._areas_of(e)) for e in targets
             }
-        else:
-            decisions = {f"{domain}.*": self.permissions.evaluate(None, "control", domain=domain)}
+        return {f"{domain}.*": self.permissions.evaluate(None, "control", domain=domain)}
+
+    @staticmethod
+    def _check_decisions(decisions: dict[str, Decision]) -> ToolResult | None:
         denied = {e: d.reason for e, d in decisions.items() if not d.allowed}
-        if denied:
-            detail = "; ".join(f"{e} ({r})" for e, r in denied.items())
-            return ToolResult(False, error=f"permission denied: {detail}", outcome="denied")
-        if any(d.needs_confirm for d in decisions.values()):
-            label = ", ".join(
-                sanitize_label(self.client.cache.entities[e].name)
-                if e in self.client.cache.entities
-                else e
-                for e in decisions
-            )
-            question = f"Confirmer l'action {domain}.{service} sur : {label} ?"
-            if not await ctx.confirm(question):
-                return ToolResult(False, error="action declined by the user", outcome="declined")
-        payload = dict(data)
-        if targets:
-            payload["entity_id"] = targets
-        previous = {
-            e: self.client.cache.entities[e].state
+        if not denied:
+            return None
+        detail = "; ".join(f"{e} ({r})" for e, r in denied.items())
+        return ToolResult(False, error=f"permission denied: {detail}", outcome="denied")
+
+    async def _confirm(
+        self, ctx: ToolContext, domain: str, service: str, decisions: dict[str, Decision]
+    ) -> ToolResult | None:
+        if not any(d.needs_confirm for d in decisions.values()):
+            return None
+        entities = self.client.cache.entities
+        label = ", ".join(
+            sanitize_label(entities[e].name) if e in entities else e for e in decisions
+        )
+        if await ctx.confirm(f"Confirmer l'action {domain}.{service} sur : {label} ?"):
+            return None
+        return ToolResult(False, error="action declined by the user", outcome="declined")
+
+    def _reversible_states(self, targets: list[str]) -> dict[str, str]:
+        """States to restore with /annuler (only domains that can be put back)."""
+        entities = self.client.cache.entities
+        return {
+            e: entities[e].state
             for e in targets
-            if e.split(".", 1)[0] in REVERSIBLE and e in self.client.cache.entities
+            if e.split(".", 1)[0] in REVERSIBLE and e in entities
         }
-        try:
-            changed = await self.client.call_service(domain, service, payload)
-        except HAError as exc:
-            return ToolResult(False, error=str(exc))
-        for s in changed:
-            self.client.cache.apply_state(s)
-        if record_undo and previous:
-            self.undo.push(
-                ctx.chat_id, UndoRecord(f"{domain}.{service}", previous, time.monotonic())
-            )
-        return ToolResult(True, data={"called": f"{domain}.{service}", "targets": targets or None})
 
 
 def _as_list(value: Any) -> list[str]:
@@ -263,7 +298,8 @@ def _as_list(value: Any) -> list[str]:
     return [str(value)]
 
 
-def register_ha_tools(registry: ToolRegistry, ha: HomeAssistantService) -> None:
+# a registration table: each nested handler is small, McCabe only adds them up
+def register_ha_tools(registry: ToolRegistry, ha: HomeAssistantService) -> None:  # noqa: C901
     async def list_entities(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
         items = ha.readable_entities(args.get("domain"), args.get("area"), args.get("query"))
         limit = int(args.get("limit", 50))

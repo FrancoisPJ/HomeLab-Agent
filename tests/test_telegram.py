@@ -8,8 +8,8 @@ import httpx
 from homelab_agent.config.models import TelegramSection, Tier
 from homelab_agent.fakes.telegram import create_app as fake_tg
 from homelab_agent.gateway.base import IncomingMessage, Replier
+from homelab_agent.gateway.commands import Command, CommandTable
 from homelab_agent.gateway.telegram import (
-    HELP_TEXT,
     Button,
     StreamEditor,
     TelegramFrontend,
@@ -58,12 +58,23 @@ class FakeBot:
         ]
 
 
-async def _text() -> str:
+async def _text(chat: str = "", arg: str = "") -> str:
     return "status!"
 
 
-async def _chat(chat: str) -> str:
+async def _chat(chat: str, arg: str = "") -> str:
     return f"done {chat}"
+
+
+#: the four built-in commands, as the application registers them
+TABLE = CommandTable(
+    {
+        "status": Command("état des moteurs et du budget", _text),
+        "model": Command("moteurs et modèles configurés", _text),
+        "jobs": Command("tâches en cours", _chat),
+        "reset": Command("oublier la conversation", _chat),
+    }
+)
 
 
 def frontend(bot: FakeBot, handler: Any = None, **cfg: Any) -> TelegramFrontend:
@@ -75,8 +86,7 @@ def frontend(bot: FakeBot, handler: Any = None, **cfg: Any) -> TelegramFrontend:
         await replier.send(f"echo {msg.text}")
 
     f = TelegramFrontend(
-        bot, lambda: section, handler or default_handler,
-        status_text=_text, model_text=_text, jobs_text=_chat, reset_chat=_chat,
+        bot, lambda: section, handler or default_handler, commands=TABLE,
     )  # fmt: skip
     f.received = received  # type: ignore[attr-defined]
     return f
@@ -102,7 +112,13 @@ async def test_commands() -> None:
     await f.on_message(111, 111, "/cloud")
     await f.on_message(111, 111, "/nope")
     texts = bot.texts()
-    assert texts[0] == HELP_TEXT
+    assert texts[0] == (  # unchanged since the first version
+        "Commandes :\n/status – état des moteurs et du budget\n"
+        "/model – moteurs et modèles configurés\n/cloud <texte> – forcer le cloud\n"
+        "/deep <texte> – forcer le CPU (réponse différée)\n/jobs – tâches en cours\n"
+        "/reset – oublier la conversation\n/help – cette aide\n"
+        "Sinon, écris simplement ta demande."
+    )
     assert texts[1:5] == ["status!", "status!", "done 111", "done 111"]
     assert texts[5].startswith("Usage")
     assert "inconnue" in texts[6]
@@ -187,10 +203,7 @@ async def test_confirmation_timeout() -> None:
         bot,
         lambda: section,
         None,
-        status_text=_text,
-        model_text=_text,
-        jobs_text=_chat,
-        reset_chat=_chat,
+        commands=TABLE,
     )  # type: ignore[arg-type]
     section_fast = section.model_copy(update={"confirm_timeout_s": 5})
     f.cfg = lambda: section_fast
@@ -233,10 +246,7 @@ async def test_aiogram_gateway_against_fake_bot_api(run_server: Any) -> None:
         gw.api,
         lambda: section,
         handler,
-        status_text=_text,
-        model_text=_text,
-        jobs_text=_chat,
-        reset_chat=_chat,
+        commands=TABLE,
     )
     gw.attach(f)
     await gw.start()
@@ -292,8 +302,8 @@ async def test_extra_commands_and_help() -> None:
     section = TelegramSection(allowed_user_ids=[111])
     f = TelegramFrontend(
         bot, lambda: section, None,  # type: ignore[arg-type]
-        status_text=_text, model_text=_text, jobs_text=_chat, reset_chat=_chat,
-        commands={"run": ("lancer une routine", run), "boom": ("casse", boom)},
+        commands=CommandTable({"run": Command("lancer une routine", run),
+                               "boom": Command("casse", boom)}),
     )  # fmt: skip
     await f.on_message(111, 5, "/run soir")
     await f.on_message(111, 5, "/boom")
@@ -314,8 +324,7 @@ async def test_action_buttons_are_one_shot_and_expire() -> None:
     section = TelegramSection(allowed_user_ids=[111])
     f = TelegramFrontend(
         bot, lambda: section, None,  # type: ignore[arg-type]
-        status_text=_text, model_text=_text, jobs_text=_chat, reset_chat=_chat,
-        clock=lambda: now[0],
+        commands=TABLE, clock=lambda: now[0],
     )  # fmt: skip
     calls: list[str] = []
 

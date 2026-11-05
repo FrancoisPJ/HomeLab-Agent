@@ -169,3 +169,66 @@ def test_grafana_queries_use_existing_metrics() -> None:
         t.get("datasource", {}).get("uid") for p in dash["panels"] for t in p.get("targets", [])
     }
     assert uids <= {"prometheus"}
+
+
+# ----------------------------------------------------------- dashboard maths
+def test_build_dashboard_is_pure_and_correct() -> None:
+    from dataclasses import dataclass
+    from zoneinfo import ZoneInfo
+
+    from homelab_agent.web.dashboard import build_dashboard, greeting, latency_label
+
+    @dataclass
+    class Row:
+        created_at: datetime
+        tier: str
+        latency_ms: int
+
+    now = datetime(2026, 11, 5, 9, 30, tzinfo=UTC)
+    naive = now.replace(tzinfo=None)
+    rows = [
+        Row(naive - timedelta(minutes=5), "gpu", 300),
+        Row(naive - timedelta(minutes=50), "fast_path", 10),
+        Row(naive - timedelta(hours=3), "cpu", 120_000),  # excluded from latency
+        Row(naive - timedelta(hours=30), "gpu", 999),  # older than 24 h: clamped to hour 0
+    ]
+    spend = [(naive - timedelta(hours=2), 0.02), (naive - timedelta(minutes=1), 0.01)]
+    d = build_dashboard(rows, spend, now=now, tz=ZoneInfo("Europe/Paris"), day_spend=0.03,
+                        daily_limit=0.02, house=None)  # fmt: skip
+    assert d["messages"] == 4
+    assert d["greeting"] == "Bonjour" and d["date"] == "05/11/2026 · 10:30"  # local time
+    assert [s[0] for s in d["segments"]] == ["chemin rapide", "rapide", "lourd"]  # tier order
+    assert (d["p95_label"], d["p95_unit"]) == ("929", "ms")  # 300 + 0.9 × (999 − 300)
+    assert d["budget_pct"] == 150  # not capped
+    assert build_dashboard([], [], now=now, tz=UTC, day_spend=1, daily_limit=0,
+                           house=None)["budget_pct"] == 0  # fmt: skip
+    assert [greeting(h) for h in (2, 8, 15, 21)] == ["Bonne nuit", "Bonjour", "Bon après-midi",
+                                                       "Bonsoir"]  # fmt: skip
+    assert latency_label(1530) == ("1.5", "s") and latency_label(42) == ("42", "ms")
+
+
+def test_login_limiter_forgets_old_failures() -> None:
+    from homelab_agent.web.auth import LoginLimiter
+
+    now = [0.0]
+    lim = LoginLimiter(max_failures=2, window_s=10, clock=lambda: now[0])
+    lim.failed("a")
+    lim.failed("a")
+    lim.failed("b")
+    assert lim.blocked("a") and not lim.blocked("b")
+    now[0] = 11
+    assert not lim.blocked("a")
+    assert lim._failures == {}  # stale clients are dropped, the dict does not grow forever
+    lim.failed("a")
+    lim.succeeded("a")
+    assert not lim.blocked("a")
+
+
+def test_invalid_form_values_are_client_errors(client: TestClient) -> None:  # noqa: F811
+    login(client)
+    assert client.post("/permissions/default", data={"policy": "bogus"}).status_code == 400
+    r = client.post("/permissions/entity", data={"entity_id": "light.salon", "mode": "x"})
+    assert r.status_code == 400
+    assert client.post("/permissions/rule", data={"mode": "nope"}).status_code == 400
+    assert client.post("/proactive/routine/soir/explode").status_code == 422
+    assert client.post("/proactive/run/inconnue").status_code == 404

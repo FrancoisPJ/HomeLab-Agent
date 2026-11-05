@@ -57,6 +57,10 @@ class HealthTracker:
         until = self._down_until.get(name)
         return until is None or self.clock() >= until
 
+    def available(self, name: str) -> bool:
+        """What the status views show: not in cooldown and the last probe (if any) was ok."""
+        return self.is_up(name) and self.last_probe.get(name, True)
+
     async def probe(self, backends: dict[str, LLMBackend]) -> None:
         async def one(name: str, b: LLMBackend) -> None:
             try:

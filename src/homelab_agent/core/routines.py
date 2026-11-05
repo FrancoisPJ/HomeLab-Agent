@@ -140,6 +140,35 @@ class RoutineError(Exception):
     pass
 
 
+def _reject_env_references(args: dict[str, Any]) -> None:
+    # text saved in config.yaml would be expanded from the environment on reload:
+    # never let a conversation write ${VAR} (it could exfiltrate a secret)
+    for key, value in args.items():
+        if contains_env_reference(json.dumps(value, ensure_ascii=False)):
+            raise ValueError(f"'{key}' ne peut pas contenir '${{' (variables d'environnement)")
+
+
+def _action_fields(what: str, text: str, args: dict[str, Any]) -> dict[str, Any]:
+    """What the routine does: a reminder, a request to the agent, or a check."""
+    if what in ("reminder", "rappel", "message"):
+        if not text:
+            raise ValueError("un rappel a besoin d'un texte")
+        return {"message": text}
+    if what in ("ask", "prompt", "demande", "question"):
+        if not text:
+            raise ValueError("une demande a besoin d'un texte")
+        tier = args.get("tier")
+        return {"prompt": text, **({"tier": tier} if tier in ("gpu", "cpu", "cloud") else {})}
+    if what in ("check", "verification", "verifier"):
+        check: dict[str, Any] = {}
+        if args.get("check_domains"):
+            check["domains"] = [str(d) for d in args["check_domains"]]
+        if args.get("check_states"):
+            check["states"] = [str(s) for s in args["check_states"]]
+        return {"check": check, "only_if_found": bool(args.get("only_if_found", True))}
+    raise ValueError("what doit valoir reminder, ask ou check")
+
+
 class RoutineManager:
     def __init__(
         self,
@@ -173,11 +202,8 @@ class RoutineManager:
             raise RoutineError(str(exc)) from exc
 
     def build(self, args: dict[str, Any], *, chat_id: str | None, requester: str) -> Routine:
-        for key, value in args.items():
-            # text saved in config.yaml would be expanded from the environment on reload:
-            # never let a conversation write ${VAR} (it could exfiltrate a secret)
-            if contains_env_reference(json.dumps(value, ensure_ascii=False)):
-                raise ValueError(f"'{key}' ne peut pas contenir '${{' (variables d'environnement)")
+        """A routine from the model's tool arguments (validated, never saved here)."""
+        _reject_env_references(args)
         what = _ascii(str(args.get("what") or "")).strip()
         text = str(args.get("text") or "").strip()
         fields: dict[str, Any] = {"at": parse_time(args.get("at", ""))}
@@ -186,38 +212,24 @@ class RoutineManager:
             fields["date"] = when_date
         else:
             fields["days"] = parse_days(args.get("days"))
-        if what in ("reminder", "rappel", "message"):
-            if not text:
-                raise ValueError("un rappel a besoin d'un texte")
-            fields["message"] = text
-        elif what in ("ask", "prompt", "demande", "question"):
-            if not text:
-                raise ValueError("une demande a besoin d'un texte")
-            fields["prompt"] = text
-            if args.get("tier") in ("gpu", "cpu", "cloud"):
-                fields["tier"] = args["tier"]
-        elif what in ("check", "verification", "verifier"):
-            check: dict[str, Any] = {}
-            if args.get("check_domains"):
-                check["domains"] = [str(d) for d in args["check_domains"]]
-            if args.get("check_states"):
-                check["states"] = [str(s) for s in args["check_states"]]
-            fields["check"] = check
-            fields["only_if_found"] = bool(args.get("only_if_found", True))
-        else:
-            raise ValueError("what doit valoir reminder, ask ou check")
+        fields.update(_action_fields(what, text, args))
         if chat_id and chat_id.lstrip("-").isdigit():
             fields["chat_ids"] = [int(chat_id)]
         fields["created_by"] = requester
-        base = slug(str(args.get("name") or text or what), fallback=what or "routine")
-        name, i = base, 2
-        existing = {r.name for r in self.routines}
-        while name in existing:
-            name, i = f"{base}_{i}", i + 1
+        name = self._unique_name(
+            slug(str(args.get("name") or text or what), fallback=what or "routine")
+        )
         try:
             return Routine(name=name, **fields)
         except ValidationError as exc:
             raise ValueError("; ".join(e["msg"] for e in exc.errors())) from exc
+
+    def _unique_name(self, base: str) -> str:
+        existing = {r.name for r in self.routines}
+        name, i = base, 2
+        while name in existing:
+            name, i = f"{base}_{i}", i + 1
+        return name
 
     def add(self, routine: Routine) -> None:
         current = self.routines

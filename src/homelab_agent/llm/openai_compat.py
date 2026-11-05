@@ -73,6 +73,74 @@ def _parse_args(raw: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {"_value": parsed}
 
 
+_DONE: dict[str, Any] = {}
+
+
+def parse_sse_line(line: str) -> dict[str, Any] | None:
+    """One ``data:`` line of a server-sent stream: its JSON, ``_DONE``, or None to skip."""
+    if not line.startswith("data:"):
+        return None
+    raw = line[5:].strip()
+    if raw == "[DONE]":
+        return _DONE
+    try:
+        chunk = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return chunk if isinstance(chunk, dict) else None
+
+
+class StreamAssembler:
+    """Rebuilds one answer from streamed chunks: text pieces and tool calls sent in parts."""
+
+    def __init__(self, model: str) -> None:
+        self.model = model
+        self.text: list[str] = []
+        self.calls: dict[int, dict[str, Any]] = {}
+        self.usage: Usage | None = None
+        self.finish: str | None = None
+
+    def feed(self, chunk: dict[str, Any]) -> list[str]:
+        """Absorb one chunk; returns the new text to show to the user."""
+        self.model = chunk.get("model", self.model)
+        if chunk.get("usage"):
+            u = chunk["usage"]
+            self.usage = Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+        pieces: list[str] = []
+        for choice in chunk.get("choices") or []:
+            delta = choice.get("delta") or {}
+            if delta.get("content"):
+                pieces.append(delta["content"])
+            for part in delta.get("tool_calls") or []:
+                self._add_call_part(part)
+            self.finish = choice.get("finish_reason") or self.finish
+        self.text += pieces
+        return pieces
+
+    def _add_call_part(self, part: dict[str, Any]) -> None:
+        slot = self.calls.setdefault(part.get("index", 0), {"id": None, "name": "", "args": ""})
+        if part.get("id"):
+            slot["id"] = part["id"]
+        fn = part.get("function") or {}
+        slot["name"] += fn.get("name") or ""
+        slot["args"] += fn.get("arguments") or ""
+
+    def result(self, messages: list[Message]) -> ChatResult:
+        content = "".join(self.text)
+        usage = self.usage
+        if usage is None or not usage.input_tokens:  # server did not count: estimate
+            usage = Usage(estimate_messages_tokens(messages), estimate_tokens(content))
+        tool_calls = [
+            ToolCall(
+                id=slot["id"] or f"call_{uuid.uuid4().hex[:8]}",
+                name=slot["name"],
+                arguments=_parse_args(slot["args"]),
+            )
+            for _, slot in sorted(self.calls.items())
+        ]
+        return ChatResult(content, tool_calls, usage, self.model, self.finish)
+
+
 class OpenAICompatClient(LLMBackend):
     def __init__(
         self,
@@ -181,11 +249,7 @@ class OpenAICompatClient(LLMBackend):
         payload = self._payload(messages, tools, max_tokens)
         payload["stream"] = True
         payload["stream_options"] = {"include_usage": True}
-        text_parts: list[str] = []
-        calls: dict[int, dict[str, Any]] = {}
-        usage = Usage()
-        finish: str | None = None
-        model = self.model
+        answer = StreamAssembler(self.model)
         try:
             async with (
                 self._slots,
@@ -195,52 +259,17 @@ class OpenAICompatClient(LLMBackend):
                     await resp.aread()
                     self._raise_for_status(resp)
                 async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    raw = line[5:].strip()
-                    if raw == "[DONE]":
+                    chunk = parse_sse_line(line)
+                    if chunk is _DONE:
                         break
-                    try:
-                        chunk = json.loads(raw)
-                    except json.JSONDecodeError:
-                        continue
-                    model = chunk.get("model", model)
-                    if chunk.get("usage"):
-                        u = chunk["usage"]
-                        usage = Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
-                    for choice in chunk.get("choices") or []:
-                        delta = choice.get("delta") or {}
-                        if delta.get("content"):
-                            text_parts.append(delta["content"])
-                            yield StreamDelta(delta["content"])
-                        for tc in delta.get("tool_calls") or []:
-                            slot = calls.setdefault(
-                                tc.get("index", 0), {"id": None, "name": "", "args": ""}
-                            )
-                            if tc.get("id"):
-                                slot["id"] = tc["id"]
-                            fn = tc.get("function") or {}
-                            if fn.get("name"):
-                                slot["name"] += fn["name"]
-                            if fn.get("arguments"):
-                                slot["args"] += fn["arguments"]
-                        finish = choice.get("finish_reason") or finish
+                    if chunk is not None:
+                        for piece in answer.feed(chunk):
+                            yield StreamDelta(piece)
         except httpx.TimeoutException as exc:
             raise BackendTimeout(f"{self.name}: timeout") from exc
         except httpx.TransportError as exc:
             raise BackendUnavailable(f"{self.name}: {exc.__class__.__name__}") from exc
-        content = "".join(text_parts)
-        if not usage.input_tokens:
-            usage = Usage(estimate_messages_tokens(messages), estimate_tokens(content))
-        tool_calls = [
-            ToolCall(
-                id=s["id"] or f"call_{uuid.uuid4().hex[:8]}",
-                name=s["name"],
-                arguments=_parse_args(s["args"]),
-            )
-            for _, s in sorted(calls.items())
-        ]
-        yield StreamDone(ChatResult(content, tool_calls, usage, model, finish))
+        yield StreamDone(answer.result(messages))
 
     async def health(self) -> bool:
         # llama-server exposes /health at the root, llama-swap and others /v1/models.

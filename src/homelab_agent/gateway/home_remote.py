@@ -80,7 +80,7 @@ class HomeRemote:
 
     def attach(self) -> None:
         self.f.callbacks["hm"] = self.on_callback
-        self.f.commands["maison"] = ("télécommande de la maison (boutons)", self.command)
+        self.f.commands.add("maison", "télécommande de la maison (boutons)", self.command)
 
     # ------------------------------------------------------------- tokens
     def _token(self, kind: str, value: str = "", page: int = 0) -> str:

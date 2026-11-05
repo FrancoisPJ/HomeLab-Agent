@@ -15,7 +15,7 @@ from homelab_agent.gateway.telegram import TelegramFrontend
 from homelab_agent.voice.stt import SpeechToText, STTError
 
 from .conftest import base_config
-from .test_telegram import FakeBot, _chat, _text
+from .test_telegram import TABLE, FakeBot
 
 VOICE = VoiceSection(enabled=True, stt_url="http://stt/v1/audio/transcriptions", max_duration_s=60)
 
@@ -58,8 +58,7 @@ def frontend(
 
     section = TelegramSection(allowed_user_ids=[111])
     f = TelegramFrontend(
-        bot, lambda: section, handler, status_text=_text, model_text=_text,
-        jobs_text=_chat, reset_chat=_chat,
+        bot, lambda: section, handler, commands=TABLE,
         voice=(lambda: voice) if voice else None, stt=stt if stt is not None else stt_client(),
     )  # fmt: skip
     return f, got
@@ -148,8 +147,7 @@ async def test_aiogram_voice_end_to_end(run_server: Any) -> None:
     voice = VoiceSection(enabled=True, stt_url=f"{stt_srv.url}/v1/audio/transcriptions")
     section = TelegramSection(allowed_user_ids=[111])
     f = TelegramFrontend(
-        gw.api, lambda: section, handler, status_text=_text, model_text=_text,
-        jobs_text=_chat, reset_chat=_chat, voice=lambda: voice, stt=SpeechToText(voice),
+        gw.api, lambda: section, handler, commands=TABLE, voice=lambda: voice, stt=SpeechToText(voice),
     )  # fmt: skip
     gw.attach(f)
     await gw.start()
@@ -213,8 +211,7 @@ def speaking_frontend(
 
     section = TelegramSection(allowed_user_ids=[111])
     f = TelegramFrontend(
-        bot, lambda: section, handler, status_text=_text, model_text=_text,
-        jobs_text=_chat, reset_chat=_chat, voice=lambda: voice, stt=stt_client(),
+        bot, lambda: section, handler, commands=TABLE, voice=lambda: voice, stt=stt_client(),
         tts=TextToSpeech(voice, transport=httpx.ASGITransport(app=tts_app or fake_tts())),
     )  # fmt: skip
     return f, got

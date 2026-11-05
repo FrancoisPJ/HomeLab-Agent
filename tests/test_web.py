@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from homelab_agent.app import Services
+from homelab_agent.commands import AgentCommands
 from homelab_agent.config.loader import ConfigStore
 from homelab_agent.web.app import PanelSecretMissing, create_app, require_panel_secret
 from homelab_agent.web.auth import check_session, make_session
@@ -41,6 +42,7 @@ async def services(tmp_path: Path) -> Services:
     from homelab_agent.core.routines import RoutineManager
 
     svc.routine_manager = RoutineManager(svc.store, svc.routines)
+    svc.commands = AgentCommands(svc).table()
     return svc
 
 

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from homelab_agent.web.app import create_app
-from homelab_agent.web.chat import RoutingNotifier, WebChatHub, parse_message
+from homelab_agent.web.chat import RoutingNotifier, WebChatHub
 
 from .harness import RecordingNotifier
 from .test_web import PASSWORD, login, services
@@ -39,11 +39,18 @@ def events(c: TestClient, turn: str, until: str = "done") -> list[dict[str, Any]
     return out
 
 
-def test_parse_message() -> None:
-    assert parse_message("/cloud dis bonjour").forced_tier is not None
-    m = parse_message("/deep  rédige")
-    assert m.text == "rédige" and m.chat_id == "web:panel" and m.user_id == "panel"
-    assert parse_message("bonjour").forced_tier is None
+def test_web_chat_has_the_same_commands_as_telegram(client: TestClient) -> None:
+    def ask(text: str) -> list[str]:
+        turn = client.post("/chat/send", data={"text": text}).json()["turn"]
+        return [e.get("text", "") for e in events(client, turn) if e["type"] == "message"]
+
+    assert "/routines" in ask("/help")[0] and "/maison" not in ask("/help")[0]  # Telegram only
+    assert ask("/status")[0].startswith("État des moteurs")
+    assert ask("/inconnue") == ["Commande inconnue. /help pour la liste."]
+    assert ask("/cloud") == ["Usage : /cloud <ta demande>"]
+    assert ask("/reset") == ["🧹 Contexte effacé."]
+    # forced tier: the argument goes to the agent, on the CPU queue for /deep
+    assert any("tâche #" in t for t in ask("/deep  rédige un poème"))
 
 
 def test_chat_page_requires_login(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

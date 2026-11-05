@@ -26,7 +26,7 @@ from homelab_agent.tools.homeassistant.client import HomeAssistantClient
 
 from .conftest import ROOT, wait_for
 from .harness import build_harness
-from .test_telegram import FakeBot, _chat, _text
+from .test_telegram import TABLE, FakeBot
 
 
 async def test_only_the_requester_can_confirm_in_a_group() -> None:
@@ -34,7 +34,7 @@ async def test_only_the_requester_can_confirm_in_a_group() -> None:
     section = TelegramSection(allowed_user_ids=[111, 222], confirm_timeout_s=5)
     f = TelegramFrontend(
         bot, lambda: section, None,  # type: ignore[arg-type]
-        status_text=_text, model_text=_text, jobs_text=_chat, reset_chat=_chat,
+        commands=TABLE,
     )  # fmt: skip
     task = asyncio.create_task(f.ask_confirmation("-100", "Déverrouiller ?", "111"))
     await wait_for(lambda: bool(bot.ops))

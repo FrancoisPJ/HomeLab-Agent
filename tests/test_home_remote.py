@@ -11,7 +11,7 @@ from homelab_agent.tools.homeassistant.client import EntityInfo
 
 from .conftest import wait_for
 from .harness import Harness, build_harness
-from .test_telegram import FakeBot, _chat, _text
+from .test_telegram import TABLE, FakeBot
 
 
 async def setup(
@@ -21,8 +21,7 @@ async def setup(
     bot = FakeBot()
     section = TelegramSection(allowed_user_ids=[111, 222], confirm_timeout_s=5)
     f = TelegramFrontend(
-        bot, lambda: section, h.orchestrator.handle,
-        status_text=_text, model_text=_text, jobs_text=_chat, reset_chat=_chat,
+        bot, lambda: section, h.orchestrator.handle, commands=TABLE,
     )  # fmt: skip
     remote = HomeRemote(f, h.ha, lambda: section)
     remote.attach()
