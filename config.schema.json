@@ -273,6 +273,57 @@
       "title": "AnthropicBackend",
       "type": "object"
     },
+    "CameraSection": {
+      "additionalProperties": false,
+      "description": "Camera snapshots sent to the chat that asks (/camera, or the agent on request).",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Allow camera snapshots. Off by default: cameras are sensitive. A camera must also be readable by the permission rules.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "model_tool": {
+          "default": true,
+          "description": "Let the agent send a snapshot when asked in plain words. The image goes straight to the chat: it is never given to any model, local or cloud.",
+          "title": "Model Tool",
+          "type": "boolean"
+        },
+        "max_per_minute": {
+          "default": 6,
+          "description": "Snapshots per chat and per minute.",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Max Per Minute",
+          "type": "integer"
+        },
+        "max_per_request": {
+          "default": 4,
+          "description": "Cameras sent for one request.",
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Max Per Request",
+          "type": "integer"
+        },
+        "max_bytes": {
+          "default": 8000000,
+          "description": "Largest image accepted from HA.",
+          "maximum": 20000000,
+          "minimum": 100000,
+          "title": "Max Bytes",
+          "type": "integer"
+        },
+        "timeout_s": {
+          "default": 15,
+          "exclusiveMinimum": 0,
+          "maximum": 120,
+          "title": "Timeout S",
+          "type": "number"
+        }
+      },
+      "title": "CameraSection",
+      "type": "object"
+    },
     "CloudLimits": {
       "additionalProperties": false,
       "properties": {
@@ -598,6 +649,9 @@
           "exclusiveMinimum": 0,
           "title": "Request Timeout S",
           "type": "number"
+        },
+        "cameras": {
+          "$ref": "#/$defs/CameraSection"
         }
       },
       "title": "HomeAssistantSection",

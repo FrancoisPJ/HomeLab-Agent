@@ -20,7 +20,10 @@ et réglables dans un **panneau web**. Il peut aussi **prévenir** (fuite, porte
 avec un bouton d'action, et lancer des **routines** à heure fixe, que tu crées en lui parlant
 (« rappelle-moi de sortir les poubelles tous les mardis à 20h ») ([docs/proactive.md](docs/proactive.md)).
 Les **messages vocaux** Telegram sont transcrits en local avec whisper.cpp, et l'agent peut
-**répondre de vive voix** avec Piper ([docs/voice.md](docs/voice.md)).
+**répondre de vive voix** avec Piper ([docs/voice.md](docs/voice.md)). Sur demande (« montre-moi
+l'entrée », `/camera salon`), il envoie une **photo des caméras** de la pièce, sans jamais la
+montrer à un modèle ([docs/home-assistant.md](docs/home-assistant.md#caméras), désactivé par
+défaut).
 
 > ⚠️ Le projet a été développé et testé **sans accès au matériel réel** : la CI utilise des faux
 > services (LLM, Home Assistant, Telegram). Avant d'en dépendre, déroulez la
@@ -133,7 +136,7 @@ Référence complète : [docs/configuration.md](docs/configuration.md). Vérific
 
 ## Commandes Telegram
 
-`/maison` (télécommande à boutons, sans LLM), `/annuler`, `/memoire`, `/status`, `/model`, `/cloud <texte>` (forcer le cloud), `/deep <texte>` (forcer le CPU, réponse
+`/maison` (télécommande à boutons, sans LLM), `/camera [pièce]` (photo des caméras), `/annuler`, `/memoire`, `/status`, `/model`, `/cloud <texte>` (forcer le cloud), `/deep <texte>` (forcer le CPU, réponse
 différée), `/jobs`, `/reset`, `/alerts`, `/routines`, `/run <routine>`,
 `/routine on|off|delete <routine>`, `/help`. Tout autre message part dans l'entonnoir de routage.
 

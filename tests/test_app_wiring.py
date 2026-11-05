@@ -108,3 +108,17 @@ async def test_maintenance_tasks(
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def test_camera_command_is_shared_but_photos_need_telegram(services: Services) -> None:
+    from homelab_agent.gateway.base import BufferedReplier, IncomingMessage, Replier
+    from homelab_agent.web.chat import WEB_CHAT, WEB_USER
+
+    assert "/camera" in services.commands.help_text()  # cameras are on in the dev config
+    replier = BufferedReplier()
+
+    async def agent(msg: IncomingMessage, r: Replier) -> None:
+        raise AssertionError("a command must not reach the agent")
+
+    assert await services.commands.handle("/camera salon", WEB_CHAT, WEB_USER, replier, agent)
+    assert replier.messages == ["📷 Les photos des caméras ne s'affichent que sur Telegram."]

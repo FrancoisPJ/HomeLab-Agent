@@ -297,3 +297,18 @@ def test_15_voice_note_gets_a_spoken_answer() -> None:
     assert voices, [m.get("text") for m in sent]
     # the fake TTS "audio" is the text it was asked to say
     assert voices[0]["voice_text"] == "C'est fait. J'ai éteint « salon »."
+
+
+def test_16_camera_snapshot_on_request() -> None:
+    """/camera and plain words both send the fake JPEG frame; the model never gets it."""
+    for text in ("/camera salon", '[[tool:ha_camera_snapshot {"room": "entrée"}]]'):
+        since = send(text)
+        deadline = time.time() + 20
+        photos: list[dict[str, Any]] = []
+        while time.time() < deadline and not photos:
+            with client() as c:
+                sent = c.get(f"{TG}/_test/sent").json()[since:]
+            photos = [m for m in sent if m.get("op") == "photo"]
+            time.sleep(0.3)
+        assert photos, [m.get("text") for m in sent]
+        assert photos[0]["photo_is_jpeg"] and photos[0]["caption"].startswith("📷 Caméra")

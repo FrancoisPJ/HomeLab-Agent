@@ -46,6 +46,9 @@ class FakeBot:
     async def send_voice(self, chat_id: str, audio: bytes) -> None:
         self.ops.append(("voice", (chat_id, audio)))
 
+    async def send_photo(self, chat_id: str, image: bytes, caption: str = "") -> None:
+        self.ops.append(("photo", (chat_id, image, caption)))
+
     async def download_file(self, file_id: str) -> bytes:
         self.ops.append(("download", file_id))
         return self.files[file_id]

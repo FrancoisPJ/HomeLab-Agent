@@ -25,7 +25,7 @@ class AgentCommands:
         self.s = services
 
     def table(self) -> CommandTable:
-        return CommandTable(
+        table = CommandTable(
             {
                 "status": Command("état des moteurs et du budget", self.status),
                 "model": Command("moteurs et modèles configurés", self.model),
@@ -40,6 +40,9 @@ class AgentCommands:
                 "alerts": Command("alertes et derniers déclenchements", self.alerts),
             }
         )
+        if self.s.cameras is not None:  # photos only show on Telegram; it says so elsewhere
+            table.add("camera", "photo des caméras d'une pièce", self.s.cameras.command)
+        return table
 
     # ------------------------------------------------------------- engines
     async def status(self, chat_id: str = "", arg: str = "") -> str:

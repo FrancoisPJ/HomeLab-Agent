@@ -6,6 +6,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 ## [Non publié]
 
 ### Ajouté
+- **Photos des caméras dans Telegram** : `/camera [pièce]` (boutons par pièce sans argument) et
+  en langage naturel (« montre-moi l'entrée », outil `ha_camera_snapshot`). Désactivé par défaut
+  (`home_assistant.cameras.enabled`) ; caméra soumise aux permissions de lecture, image envoyée
+  seulement à la conversation qui la demande et jamais à un modèle, limite par minute, journal
+  d'audit. Voir [docs/home-assistant.md](docs/home-assistant.md#caméras).
 - **Supervision Prometheus + Grafana** : profil Compose `monitoring`, tableau de bord de 19
   panneaux provisionné automatiquement (niveaux, latences p50/p95, disponibilité des moteurs,
   outils, alertes, budget, voix), généré par `scripts/grafana_dashboard.py` et vérifié en CI ;

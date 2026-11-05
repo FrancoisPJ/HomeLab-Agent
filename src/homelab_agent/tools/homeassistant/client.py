@@ -206,6 +206,36 @@ class HomeAssistantClient:
         )
         return list(data[0]) if data else []
 
+    async def camera_snapshot(
+        self, entity_id: str, *, max_bytes: int = 8_000_000, timeout_s: float | None = None
+    ) -> tuple[bytes, str]:
+        """Current image of a camera (``/api/camera_proxy``): (bytes, content type)."""
+        timeout: Any = timeout_s if timeout_s is not None else httpx.USE_CLIENT_DEFAULT
+        try:
+            async with self._http.stream(
+                "GET", f"/api/camera_proxy/{entity_id}", timeout=timeout
+            ) as resp:
+                if resp.status_code == 401:
+                    raise HAError("Home Assistant rejected the token (401)")
+                if resp.status_code >= 400:
+                    raise HAError(f"Home Assistant HTTP {resp.status_code} for {entity_id}")
+                ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+                if not ctype.startswith("image/"):
+                    raise HAError(f"{entity_id} did not return an image ({ctype or 'no type'})")
+                declared = resp.headers.get("content-length", "")
+                if declared.isdigit() and int(declared) > max_bytes:
+                    raise HAError(f"{entity_id}: image too large ({int(declared)} bytes)")
+                data = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    data += chunk
+                    if len(data) > max_bytes:
+                        raise HAError(f"{entity_id}: image too large (> {max_bytes} bytes)")
+        except httpx.HTTPError as exc:
+            raise HAError(f"Home Assistant unreachable: {exc.__class__.__name__}") from exc
+        if not data:
+            raise HAError(f"{entity_id}: empty image")
+        return bytes(data), ctype
+
     async def refresh_cache_rest(self) -> None:
         self.cache.load(await self.get_states())
 

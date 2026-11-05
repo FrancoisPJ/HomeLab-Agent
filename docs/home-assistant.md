@@ -85,6 +85,52 @@ Elle vaut pour la dernière action de la conversation, pendant une heure, et ne 
 états marche/arrêt (pas la luminosité, la couleur ou une position intermédiaire). Les scènes, scripts
 et notifications ne s'annulent pas.
 
+## Caméras
+
+L'agent peut envoyer dans Telegram une **photo instantanée** des caméras d'une pièce. Il récupère
+l'image par l'API de Home Assistant (`/api/camera_proxy/<entité>`), avec le même token.
+
+**Désactivé par défaut** : les caméras sont sensibles. Pour l'activer, dans `config.yaml` :
+
+```yaml
+home_assistant:
+  cameras:
+    enabled: true        # obligatoire
+    model_tool: true     # l'agent peut envoyer une photo quand on la demande en langage naturel
+    max_per_minute: 6    # photos par conversation et par minute
+    max_per_request: 4   # caméras envoyées pour une même demande
+    max_bytes: 8000000   # image refusée au-delà (8 Mo)
+    timeout_s: 15
+```
+
+Utilisation :
+
+- `/camera salon` : une photo par caméra de la pièce, avec sa légende (« 📷 Caméra salon · 21:42 ») ;
+- `/camera` seul : un bouton par pièce équipée, plus « Toutes » ;
+- `/camera toutes` : toutes les caméras (dans la limite de `max_per_request`) ;
+- en langage naturel : « montre-moi l'entrée », « qu'est-ce qui se passe dans le salon ? »
+  (outil `ha_camera_snapshot`).
+
+La pièce se reconnaît sans tenir compte des accents ni des majuscules (« l'entrée », « ENTREE »),
+on peut aussi donner le nom ou l'`entity_id` d'une caméra.
+
+Confidentialité, appliquée par le code quel que soit le chemin (commande, bouton, agent) :
+
+- **l'image n'est jamais donnée à un modèle**, ni local ni cloud : l'outil de l'agent ne reçoit
+  qu'un court texte (« photo envoyée : Caméra salon »). L'agent ne voit donc pas l'image et ne doit
+  pas la décrire ;
+- une caméra n'est utilisable que si les **permissions** l'autorisent en lecture : mettez une
+  caméra en `deny` dans le panneau (page Permissions) pour qu'elle disparaisse de `/camera` et de
+  l'agent ;
+- la photo part **uniquement dans la conversation qui l'a demandée**, et seuls les utilisateurs de
+  la liste blanche peuvent la demander ;
+- chaque photo est inscrite au **journal d'audit** (`camera_snapshot` : demandeur, caméra,
+  conversation, résultat) ;
+- **limite de débit** par conversation (`max_per_minute`).
+
+Les photos ne s'affichent que dans Telegram : dans le chat du panneau web, l'agent répond qu'elles
+n'y sont pas disponibles.
+
 ## Journal d'audit
 
 Chaque action (et chaque appel d'outil du LLM) est enregistrée : date, demandeur, niveau et modèle,
@@ -106,4 +152,5 @@ actions sensibles doivent être en `read_only` ou sous confirmation.
 ## Faux Home Assistant
 
 `homelab-agent fake ha` démarre un serveur REST + WebSocket avec quelques entités (salon, cuisine,
-serrure, volet, alarme, une entité piégée). Utilisé par les tests et le profil `dev`.
+serrure, volet, alarme, deux caméras qui renvoient une petite image générée, une entité piégée).
+Utilisé par les tests et le profil `dev` (où les caméras sont activées).

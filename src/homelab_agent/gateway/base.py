@@ -77,6 +77,13 @@ class ActionReplier(Protocol):
     async def send_actions(self, text: str, actions: list[ActionButton]) -> None: ...
 
 
+@runtime_checkable
+class PhotoReplier(Protocol):
+    """A replier that can show an image (camera snapshots). Telegram only for now."""
+
+    async def send_photo(self, image: bytes, caption: str) -> None: ...
+
+
 class BufferedReplier:
     """Collects output in memory (used for background jobs and tests)."""
 
@@ -85,6 +92,10 @@ class BufferedReplier:
         self.auto_confirm = auto_confirm
         self.questions: list[str] = []
         self.actions: list[ActionButton] = []
+        self.photos: list[tuple[bytes, str]] = []
+
+    async def send_photo(self, image: bytes, caption: str) -> None:
+        self.photos.append((image, caption))
 
     async def send_actions(self, text: str, actions: list[ActionButton]) -> None:
         self.messages.append(text)
