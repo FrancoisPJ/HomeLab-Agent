@@ -52,8 +52,10 @@ Telegram ◄─polling─►│ gateway ─► orchestrateur ─► routeur ─�
 
 1. **Chemin rapide** (`routing.fast_path`) : si le message est court, sans question, contient un seul
    verbe connu (allume, éteins, ouvre, ferme, active…) et désigne sans ambiguïté une entité (alias de la
-   config, ou nom Home Assistant porté par **une seule** entité), l'action est appelée directement —
-   **en passant par les permissions**. Les alias passent avant les noms : une entité renommée ne peut
+   config, ou nom Home Assistant porté par **une seule** entité), et ne contient **rien d'autre** que
+   des mots de liaison (« la », « du », « lumière », « stp »…), l'action est appelée directement —
+   **en passant par les permissions**. Un détail que le chemin rapide ne sait pas appliquer
+   (« à 30 % », « en rouge », « dans 10 minutes ») envoie le message au LLM. Les alias passent avant les noms : une entité renommée ne peut
    pas « capter » un alias.
 2. **Décision de niveau** : `/cloud` et `/deep` forcent le niveau ; sinon mots-clés cloud, mots-clés
    CPU, longueur du message ; par défaut GPU.

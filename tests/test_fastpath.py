@@ -43,3 +43,32 @@ def test_no_match_cases() -> None:
         is None
     )
     assert match("ouvre la porte d'entrée", FastPathSection(), c) is None  # lock: unsupported verb
+
+
+def test_simple_commands_with_filler_words_still_match() -> None:
+    c = cache()
+    sec = FastPathSection(aliases={"salon": "light.salon", "chambre": "light.chambre"})
+    for text in (
+        "éteins la lumière du salon",
+        "Allume le salon stp",
+        "allume la lampe de la chambre",
+        "éteins la lumière dans la chambre",
+        "allume la chambre s'il te plaît",
+    ):
+        assert match(text, sec, c) is not None, text
+
+
+def test_extra_details_go_to_the_llm() -> None:
+    """A detail the fast path cannot apply (brightness, colour, delay…) must not be dropped."""
+    c = cache()
+    sec = FastPathSection(aliases={"salon": "light.salon", "chambre": "light.chambre"})
+    for text in (
+        "je veux que la lumière de la chambre soit allumé seulement à 1%",
+        "allume la chambre à 30 %",
+        "allume la chambre en rouge",
+        "allume le salon dans 10 minutes",
+        "éteins le salon demain matin",
+        "allume la chambre doucement",
+        "allume la lumière cuisine à fond",
+    ):
+        assert match(text, sec, c) is None, text

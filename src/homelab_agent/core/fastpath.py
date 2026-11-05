@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from homelab_agent.config.models import FastPathSection
@@ -45,6 +46,17 @@ _SERVICES: dict[tuple[str, str], str] = {
 MAX_LEN = 80
 MAX_NAME_LEN = 40
 
+# Words allowed around the verb and the entity name. Anything else ("1%", "en rouge",
+# "dans 10 minutes", "seulement"…) carries a detail the fast path cannot apply: the LLM takes it.
+_FILLER = frozenset(
+    {
+        "la", "le", "les", "l", "du", "de", "des", "d", "the", "a", "an",
+        "lumiere", "lumieres", "lampe", "lampes", "light", "lights", "lamp", "lamps",
+        "scene", "scenes", "script",
+        "dans", "in", "stp", "svp", "please", "merci", "s", "il", "te", "plait", "vous",
+    }
+)  # fmt: skip
+
 
 @dataclass(frozen=True, slots=True)
 class FastPathMatch:
@@ -52,6 +64,39 @@ class FastPathMatch:
     service: str
     entity_ids: list[str]
     names: list[str]
+
+
+def _only_filler_left(norm: str, names: Iterable[str]) -> bool:
+    """True when the text is just verb + entity name + filler words."""
+    rest = norm
+    for pat, _ in _VERBS:
+        rest = pat.sub(" ", rest)
+    for name in names:
+        rest = rest.replace(f" {normalize(name)} ", " ")
+    return all(word in _FILLER for word in rest.split())
+
+
+def _candidates(
+    norm: str, section: FastPathSection, cache: EntityCache
+) -> tuple[dict[str, str], bool]:
+    """Entities named in the text: aliases first, else Home Assistant names.
+
+    Returns {entity_id: spoken name} and whether the names came from Home Assistant.
+    """
+    candidates: dict[str, str] = {}
+    for spoken, eid in section.aliases.items():
+        if f" {normalize(spoken)} " in norm:
+            candidates[eid] = spoken
+    if candidates or not section.match_names:
+        return candidates, False
+    for e in cache.entities.values():
+        name = normalize(e.name)
+        # names come from Home Assistant (untrusted): ignore odd ones
+        if not 3 <= len(name) <= MAX_NAME_LEN or "\n" in e.name:
+            continue
+        if f" {name} " in norm:
+            candidates[e.entity_id] = e.name
+    return candidates, True
 
 
 def match(text: str, section: FastPathSection, cache: EntityCache) -> FastPathMatch | None:
@@ -64,20 +109,7 @@ def match(text: str, section: FastPathSection, cache: EntityCache) -> FastPathMa
         return None
     action = actions.pop()
 
-    candidates: dict[str, str] = {}
-    for spoken, eid in section.aliases.items():
-        if f" {normalize(spoken)} " in norm:
-            candidates[eid] = spoken
-    from_names = False
-    if not candidates and section.match_names:
-        from_names = True
-        for e in cache.entities.values():
-            name = normalize(e.name)
-            # names come from Home Assistant (untrusted): ignore odd ones
-            if not 3 <= len(name) <= MAX_NAME_LEN or "\n" in e.name:
-                continue
-            if f" {name} " in norm:
-                candidates[e.entity_id] = e.name
+    candidates, from_names = _candidates(norm, section, cache)
     # keep the longest names only (e.g. "lumiere salon" beats "salon")
     if not candidates:
         return None
@@ -91,5 +123,7 @@ def match(text: str, section: FastPathSection, cache: EntityCache) -> FastPathMa
     domain = domains.pop()
     service = _SERVICES.get((domain, action))
     if service is None:
+        return None
+    if not _only_filler_left(norm, picked.values()):
         return None
     return FastPathMatch(domain, service, sorted(picked), [picked[k] for k in sorted(picked)])
