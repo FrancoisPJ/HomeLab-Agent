@@ -24,6 +24,7 @@ from homelab_agent.core.proactive import AlertEngine, RoutineScheduler
 from homelab_agent.core.router import TIER_LABELS, HealthTracker, Router
 from homelab_agent.core.routines import RoutineManager, describe, register_routine_tools
 from homelab_agent.gateway.base import ActionButton, BufferedReplier, Notifier, Replier
+from homelab_agent.gateway.home_remote import HomeRemote
 from homelab_agent.gateway.telegram import TelegramFrontend
 from homelab_agent.llm.base import LLMBackend
 from homelab_agent.llm.factory import build_backends
@@ -353,6 +354,8 @@ async def run(config_path: str) -> None:
             stt=services.stt,
         )
         gateway.attach(frontend)
+        if services.ha is not None:
+            HomeRemote(frontend, services.ha, lambda: store.config.telegram).attach()
         services.notifier = frontend
         if not cfg.telegram.allowed_user_ids:
             log.warning("telegram.allowed_user_ids is empty: every message will be ignored")

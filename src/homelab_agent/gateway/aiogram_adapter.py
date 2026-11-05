@@ -15,16 +15,19 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from aiogram.types import Message as TgMessage
 
 from homelab_agent.gateway.base import Gateway
-from homelab_agent.gateway.telegram import Button, TelegramFrontend
+from homelab_agent.gateway.telegram import Buttons, TelegramFrontend, keyboard_rows
 
 log = logging.getLogger(__name__)
 
 
-def _markup(buttons: list[Button] | None) -> InlineKeyboardMarkup | None:
-    if not buttons:
+def _markup(buttons: Buttons | None) -> InlineKeyboardMarkup | None:
+    rows = keyboard_rows(buttons)
+    if not rows:
         return None
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=t, callback_data=d) for t, d in buttons]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t, callback_data=d) for t, d in row] for row in rows
+        ]
     )
 
 
@@ -40,16 +43,14 @@ class AiogramBotApi:
                 await asyncio.sleep(exc.retry_after)
         return await coro_fn()
 
-    async def send_message(
-        self, chat_id: str, text: str, buttons: list[Button] | None = None
-    ) -> int:
+    async def send_message(self, chat_id: str, text: str, buttons: Buttons | None = None) -> int:
         msg = await self._retry(
             lambda: self.bot.send_message(int(chat_id), text, reply_markup=_markup(buttons))
         )
         return int(msg.message_id)
 
     async def edit_message_text(
-        self, chat_id: str, message_id: int, text: str, buttons: list[Button] | None = None
+        self, chat_id: str, message_id: int, text: str, buttons: Buttons | None = None
     ) -> None:
         try:
             await self._retry(

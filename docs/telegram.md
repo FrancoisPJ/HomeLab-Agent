@@ -26,7 +26,22 @@ des boutons par un autre utilisateur sont aussi ignorés.
 | `/deep <texte>` | force le CPU : accusé immédiat, réponse plus tard |
 | `/jobs` | dernières tâches de la conversation |
 | `/reset` | efface l'historique de la conversation |
+| `/maison` | télécommande à boutons (pièces → appareils), sans LLM |
 | `/alerts`, `/routines`, `/run <nom>`, `/routine on\|off\|delete <nom>` | domotique proactive, voir [proactive.md](proactive.md) |
+
+## Télécommande `/maison`
+
+`/maison` affiche un clavier : une ligne de boutons par pièce (zones Home Assistant), puis, dans une
+pièce, un bouton par appareil avec son état (« 💡 Lumière salon · allumé »). Un appui bascule
+l'appareil (allumer/éteindre, ouvrir/fermer, verrouiller/déverrouiller, activer une scène…) et le
+clavier se met à jour avec le nouvel état. Les capteurs de la pièce s'affichent en texte.
+
+- Aucun LLM : c'est instantané et ça marche même si tous les moteurs sont arrêtés.
+- Chaque appui passe par les **permissions** : un appareil en lecture seule s'affiche avec 🔒, un
+  appareil soumis à confirmation avec ⚠️ (et la confirmation n'est acceptée que de la personne qui a
+  appuyé). Tout est inscrit au journal d'audit (`home_remote`).
+- Domaines affichés : `telegram.remote_domains` (lumières, prises, ventilateurs, volets, serrures,
+  scènes, scripts, lecteurs, booléens, boutons). Plus de 10 appareils : pagination ◀️ ▶️.
 
 ## Streaming et limites
 

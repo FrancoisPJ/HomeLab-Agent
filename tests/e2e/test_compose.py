@@ -221,3 +221,41 @@ def test_12_create_a_reminder_from_the_chat() -> None:
     wait_text(lambda t: t == "⏰ Sortir les poubelles", since)
     since = send("/routine delete sortir_les_poubelles")
     wait_text(lambda t: "supprimée" in t, since)
+
+
+def _button(message: dict[str, Any], startswith: str) -> str:
+    for row in message["reply_markup"]["inline_keyboard"]:
+        for b in row:
+            if b["text"].startswith(startswith):
+                return str(b["callback_data"])
+    raise AssertionError(f"no button {startswith!r}: {message['reply_markup']}")
+
+
+def test_13_home_remote() -> None:
+    since = send("/maison")
+    sent = wait_text(lambda t: t.startswith("🏠 Maison"), since)
+    menu = next(m for m in sent if m["text"].startswith("🏠 Maison"))
+    mid = menu["message_id"]
+
+    def click(data: str) -> dict[str, Any]:
+        with client() as c:
+            c.post(f"{TG}/_test/callback", json={"user_id": USER, "message_id": mid, "data": data})
+        time.sleep(0.8)
+        with client() as c:
+            return next(m for m in c.get(f"{TG}/_test/messages").json() if m["message_id"] == mid)
+
+    room = click(_button(menu, "Cuisine"))
+    assert room["text"].startswith("🚪 Cuisine")
+    n = len(ha_calls())
+    light = next(
+        b["text"]
+        for row in room["reply_markup"]["inline_keyboard"]
+        for b in row
+        if "Lumière cuisine" in b["text"]
+    )
+    after = click(_button(room, light))
+    expected = "turn_on" if "éteint" in light else "turn_off"
+    assert ha_calls()[n:] == [
+        {"domain": "light", "service": expected, "data": {"entity_id": ["light.cuisine"]}}
+    ]
+    assert "Lumière cuisine" in str(after["reply_markup"])

@@ -35,7 +35,10 @@ class FakeBot:
     async def edit_message_text(
         self, chat_id: str, message_id: int, text: str, buttons: list[Button] | None = None
     ) -> None:
-        self.ops.append(("edit", (chat_id, message_id, text)))
+        if buttons:
+            self.ops.append(("edit", (chat_id, message_id, text, buttons)))
+        else:
+            self.ops.append(("edit", (chat_id, message_id, text)))
 
     async def answer_callback(self, callback_id: str, text: str = "") -> None:
         self.ops.append(("answer", (callback_id, text)))

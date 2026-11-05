@@ -6,6 +6,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 ## [Non publié]
 
 ### Ajouté
+- **Télécommande `/maison`** dans Telegram : pièces → appareils avec leur état, un appui bascule,
+  sans LLM, permissions et confirmations appliquées.
 - **Domotique proactive** : alertes sur changements d'état Home Assistant (conditions, durée,
   anti-répétition, heures calmes, bouton d'action), routines planifiées (vérification sans LLM,
   demande à l'agent, rappel simple, ponctuel ou répété), page « Proactif » du panneau,

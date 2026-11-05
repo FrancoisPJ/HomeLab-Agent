@@ -48,6 +48,13 @@ class TelegramSection(_Base):
     )
     max_message_chars: int = Field(4000, ge=500, le=4096)
     confirm_timeout_s: int = Field(60, ge=5, description="Delay before a Yes/No prompt expires.")
+    remote_domains: list[str] = Field(
+        default_factory=lambda: [
+            "light", "switch", "fan", "cover", "lock", "scene", "script", "media_player",
+            "input_boolean", "button",
+        ],
+        description="Domains shown as buttons by /maison (the Telegram home remote).",
+    )  # fmt: skip
 
 
 # ------------------------------------------------------------------------ backends

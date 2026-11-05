@@ -1418,6 +1418,14 @@
           "minimum": 5,
           "title": "Confirm Timeout S",
           "type": "integer"
+        },
+        "remote_domains": {
+          "description": "Domains shown as buttons by /maison (the Telegram home remote).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Remote Domains",
+          "type": "array"
         }
       },
       "title": "TelegramSection",
