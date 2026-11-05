@@ -42,6 +42,54 @@ ENTITIES: list[tuple[str, str, str, str, dict[str, Any]]] = [
     ("camera.entree", "streaming", "Caméra entrée", "entree", {}),
 ]  # fmt: skip
 
+
+def _svc(*fields: str, section: dict[str, Any] | None = None) -> dict[str, Any]:
+    spec: dict[str, Any] = {f: {"selector": {}} for f in fields}
+    if section:
+        spec["advanced_fields"] = {"collapsed": True, "fields": section}
+    return {"name": "", "description": "", "fields": spec}
+
+
+#: a small ``GET /api/services`` (same shape as Home Assistant); for these domains the fake
+#: refuses unknown services and fields with HTTP 400, like the real one
+SERVICES: dict[str, dict[str, Any]] = {
+    "light": {
+        "turn_on": _svc(
+            "transition", "rgb_color", "color_temp_kelvin", "brightness_pct",
+            section={"color_name": {"selector": {}}, "brightness": {"selector": {}}},
+        ),
+        "turn_off": _svc("transition", "flash"),
+        "toggle": _svc("transition"),
+    },
+    "switch": {"turn_on": _svc(), "turn_off": _svc(), "toggle": _svc()},
+    "cover": {
+        "open_cover": _svc(), "close_cover": _svc(), "stop_cover": _svc(),
+        "set_cover_position": {"fields": {"position": {"required": True, "selector": {}}}},
+    },
+    "lock": {"lock": _svc("code"), "unlock": _svc("code"), "open": _svc("code")},
+    "scene": {"turn_on": _svc("transition")},
+    "script": {"turn_on": _svc("variables"), "turn_off": _svc(), "toggle": _svc()},
+    "automation": {"trigger": _svc("skip_condition"), "turn_on": _svc(), "turn_off": _svc()},
+    "alarm_control_panel": {"alarm_disarm": _svc("code"), "alarm_arm_away": _svc("code")},
+}  # fmt: skip
+
+
+def check_service(domain: str, service: str, data: dict[str, Any]) -> str | None:
+    """Error message of Home Assistant for a call it would refuse, else None."""
+    if domain not in SERVICES:
+        return None  # not modelled: accepted
+    spec = SERVICES[domain].get(service)
+    if spec is None:
+        return f"Service {domain}.{service} not found."
+    allowed = {"entity_id", "area_id", "device_id"}
+    for name, field in spec["fields"].items():
+        allowed |= set(field["fields"]) if "fields" in field else {name}
+    extra = sorted(k for k in data if k not in allowed)
+    if extra:
+        return f"extra keys not allowed @ data['{extra[0]}']"
+    return None
+
+
 SERVICE_STATE = {
     "turn_on": "on",
     "turn_off": "off",
@@ -72,6 +120,7 @@ class FakeHA:
                 "last_updated": _now(),
             }
         self.calls: list[dict[str, Any]] = []
+        self.rejected: list[dict[str, Any]] = []  # calls answered with HTTP 400
         self.snapshots: list[str] = []  # camera_proxy requests (entity ids)
         self.subscribers: list[asyncio.Queue[dict[str, Any]]] = []
 
@@ -158,9 +207,17 @@ def create_app() -> FastAPI:
             return JSONResponse({"message": "Entity not found."}, status_code=404)
         return ha.states[entity_id]
 
+    @app.get("/api/services")
+    async def services() -> list[dict[str, Any]]:
+        return [{"domain": d, "services": svc} for d, svc in SERVICES.items()]
+
     @app.post("/api/services/{domain}/{service}")
-    async def service(domain: str, service: str, request: Request) -> list[dict[str, Any]]:
+    async def service(domain: str, service: str, request: Request) -> Any:
         data = await request.json() if await request.body() else {}
+        problem = check_service(domain, service, data)
+        if problem is not None:
+            ha.rejected.append({"domain": domain, "service": service, "data": data})
+            return JSONResponse({"message": problem}, status_code=400)
         return ha.call(domain, service, data)
 
     @app.get("/api/history/period/{start}")

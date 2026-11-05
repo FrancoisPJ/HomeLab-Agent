@@ -91,4 +91,6 @@ panneau demandent un redémarrage (les permissions, le routage et le budget sont
   local et le cloud.
 - Les textes venant de Home Assistant sont nettoyés et présentés comme **données** ; les cibles d'une
   action ne peuvent pas être glissées dans `data`.
+- Outils séparés par niveau (`tools`) : le modèle maison (GPU) a Home Assistant, les modèles profonds
+  (CPU, cloud) ont Internet et aucun outil de la maison ; un outil non proposé n'est jamais exécuté.
 - Conteneurs non-root, système de fichiers en lecture seule, `no-new-privileges`, `cap_drop: ALL`.

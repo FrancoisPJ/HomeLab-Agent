@@ -126,6 +126,8 @@ home_assistant:
   #  - { domain: lock }
   #  - { domain: alarm_control_panel }
   context_max_chars: 3000       # taille max du résumé d'entités envoyé au LLM
+  services_max_chars: 1200      # catalogue des services (light: turn_on (brightness_pct, …))
+  service_validation: fields    # fields | services | off : refuse un service ou champ inventé
 
 web:
   enabled: true
@@ -174,6 +176,29 @@ proactive:
   #    days: [mon, tue, wed, thu, fri]
   #    prompt: "Fais-moi un point court sur la maison : températures, ce qui est allumé ou ouvert."
   #    tier: gpu
+
+# -----------------------------------------------------------------------------
+#  Outils proposés à chaque niveau, par étiquette (toutes les étiquettes d'un outil
+#  doivent être listées). Défaut : le modèle maison (GPU) agit sur la maison ; le
+#  modèle profond (CPU, /deep) et le cloud ont Internet et AUCUN accès à Home
+#  Assistant, pour qu'une page web piégée ne puisse jamais agir sur la maison.
+# -----------------------------------------------------------------------------
+tools:
+  gpu: [ha, action, camera, routines, routine_edit, memory, memory_edit, internal]
+  cpu: [web, memory]
+  cloud: [web, memory]
+
+# -----------------------------------------------------------------------------
+#  Recherche Internet (web_search / web_fetch) via un SearXNG auto-hébergé.
+#  Activer : enabled: true, SEARXNG_SECRET dans .env, puis  make up PROFILE=full,web
+#  Voir docs/configuration.md#recherche-internet-web_tools
+# -----------------------------------------------------------------------------
+web_tools:
+  enabled: false
+  searxng_url: http://searxng:8080   # réseau Compose interne, aucun port publié
+  max_results: 5
+  fetch_max_chars: 6000         # texte d'une page rendu au modèle
+  blocked_domains: []           # globs, en plus des adresses privées toujours refusées
 
 # -----------------------------------------------------------------------------
 #  Mémoire longue : « souviens-toi que je me lève à 7h ». Chaque note est

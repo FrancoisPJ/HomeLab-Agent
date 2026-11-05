@@ -5,6 +5,37 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## [Non publié]
 
+### Ajouté
+- **Recherche Internet pour le modèle profond** : outils `web_search` (SearXNG auto-hébergé, API
+  JSON) et `web_fetch` (texte lisible d'une page, taille et durée limitées). Nouveau profil Compose
+  `web` (service `searxng`, aucun port publié, `deploy/searxng/settings.yml`), section `web_tools`
+  (désactivée par défaut), secret `SEARXNG_SECRET` généré par `make init`. `web_fetch` n'atteint que
+  des adresses publiques : `http(s)` seulement, refus de localhost, du réseau local, des métadonnées
+  et des IPv6 locales, connexion à l'adresse vérifiée (pas de DNS rebinding), redirections
+  revérifiées. Résultats marqués « données non fiables ».
+- **Catalogue des services Home Assistant** (`GET /api/services`, rechargé à chaque reconnexion) :
+  le modèle maison voit les services et champs principaux des `context_domains`
+  (`home_assistant.services_max_chars`).
+- **Photos et fichiers sur Telegram** : réponse claire (« Je ne peux pas encore lire les photos ni
+  les fichiers… ») au lieu du silence ; une légende est traitée comme une demande, avec une note
+  pour le modèle. Métrique `telegram_attachments_total`.
+
+### Modifié
+- **Séparation stricte des outils par niveau** (section `tools`, par étiquettes) : le modèle maison
+  (GPU) garde Home Assistant, caméras, routines, mémoire et escalade ; le modèle profond (CPU) et le
+  cloud ont Internet et la lecture de la mémoire, **sans aucun outil ni état Home Assistant** (ni la
+  liste des entités dans le prompt). Un appel à un outil non proposé au niveau est refusé (`denied`
+  dans l'audit). Après des échecs d'outils répétés, la main ne passe plus qu'à un niveau autorisé à
+  utiliser ces outils. Ancien comportement du cloud : `tools.cloud: [ha, action, memory, web]`.
+- Prompt système selon le niveau (consignes maison, ou « aucun accès à la maison » et consignes web).
+
+### Corrigé
+- **Services inventés** (`light.dim`, `light.turn_off` avec `brightness_pct`) : refusés avant
+  l'appel avec la liste des services et champs possibles (`home_assistant.service_validation`) ; un
+  refus HTTP 4xx de Home Assistant renvoie son message avec la même liste.
+- Le petit modèle s'arrêtait après une erreur d'outil en expliquant la correction : il est relancé
+  une fois pour rappeler l'outil corrigé.
+
 ## [0.5.1] - 2026-11-05
 
 ### Sécurité

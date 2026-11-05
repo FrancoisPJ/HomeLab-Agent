@@ -39,7 +39,13 @@ from homelab_agent.llm.base import (
 from homelab_agent.observability.logging import log_fields
 from homelab_agent.observability.metrics import METRICS
 from homelab_agent.store.db import Database
-from homelab_agent.tools.registry import ESCALATE_TOOL_NAME, ConfirmFn, ToolContext, ToolRegistry
+from homelab_agent.tools.registry import (
+    ESCALATE_TOOL_NAME,
+    ConfirmFn,
+    ToolContext,
+    ToolRegistry,
+    ToolResult,
+)
 
 if TYPE_CHECKING:
     from homelab_agent.core.jobs import JobQueue
@@ -51,6 +57,14 @@ log = logging.getLogger(__name__)
 #: retries, escalations and fallbacks for one message, together
 MAX_HOPS = 3
 
+#: sent (as a user turn, never stored) when the model gives up right after a tool error:
+#: small models explain the fix instead of calling the tool again
+RETRY_NUDGE = (
+    "[Système] L'appel d'outil précédent a échoué. Corrige-le d'après le message d'erreur "
+    "(services et champs possibles) et rappelle l'outil maintenant, sans commentaire. "
+    "Seulement si c'est vraiment impossible, explique pourquoi en une phrase."
+)
+
 
 @dataclass(slots=True)
 class AgentOutcome:
@@ -60,6 +74,8 @@ class AgentOutcome:
     tool_failures: int = 0
     finished: bool = False
     actions: list[str] = field(default_factory=list)  # successful action tools, for history
+    failed_tools: set[str] = field(default_factory=set)
+    last_error: str = ""
 
     def history_text(self) -> str:
         if not self.actions:
@@ -235,7 +251,15 @@ class Orchestrator:
             reason = outcome.escalation.get("reason") or "demande du modèle"
             note = f"Escalade vers {TIER_LABELS[target]} ({reason})."
         elif not outcome.finished:
-            nxt = next((t for t in self.router.neighbours(tier) if t != Tier.GPU), None)
+            # only to a tier that may use the failing tools (house tools stay on the GPU)
+            nxt = next(
+                (
+                    t
+                    for t in self.router.neighbours(tier)
+                    if t != Tier.GPU and self._tier_can_use(t, outcome.failed_tools)
+                ),
+                None,
+            )
             if nxt is None:
                 return False
             target, note = nxt, "Échecs d'outils répétés, je passe la main."
@@ -288,7 +312,10 @@ class Orchestrator:
         ``ContextOverflow`` is raised so that the router tries a bigger backend.
         """
         cfg = self.cfg
-        ha_on = self.ha is not None and cfg.home_assistant.enabled
+        # the house summary is only for tiers that may read Home Assistant
+        ha_on = (
+            self.ha is not None and cfg.home_assistant.enabled and cfg.tools.allows(tier, {"ha"})
+        )
         summary = self.ha.context_summary() if self.ha is not None and ha_on else ""
         memories = await self.memory.context_text(chat_id) if self.memory is not None else ""
         history_rows = await self.db.history(chat_id, cfg.agent.history_messages + 1)
@@ -331,6 +358,16 @@ class Orchestrator:
             )
         return messages
 
+    def _tier_can_use(self, tier: Tier, names: set[str]) -> bool:
+        tools = [self.registry.get(n) for n in names]
+        return all(t is not None and self.cfg.tools.allows(tier, t.tags) for t in tools)
+
+    def offered_tools(self, tier: Tier, msg: IncomingMessage) -> list[ToolSpec]:
+        """Tools of this tier (``tools`` section), minus the families off for this message."""
+        return self.registry.specs(
+            exclude_tags=self._excluded_tags(tier, msg), allowed_tags=self.cfg.tools.allowed(tier)
+        )
+
     def _excluded_tags(self, tier: Tier, msg: IncomingMessage) -> set[str]:
         """Tool families the model must not see for this message."""
         cfg = self.cfg
@@ -358,7 +395,7 @@ class Orchestrator:
     ) -> AgentOutcome:
         """Model ↔ tools rounds until a final answer, an escalation or too many failures."""
         stream = stream or _NullStream()
-        tools = self.registry.specs(exclude_tags=self._excluded_tags(tier, msg))
+        tools = self.offered_tools(tier, msg)
         messages = await self.build_messages(msg.chat_id, tier, msg.text, backend, tools)
         ctx = ToolContext(
             requester=msg.user_id, chat_id=msg.chat_id, tier=tier.value, model=backend.model,
@@ -366,27 +403,42 @@ class Orchestrator:
         )  # fmt: skip
         if confirm is not None:
             ctx.confirm = confirm
+        offered = {t.name for t in tools}
         outcome = AgentOutcome()
+        nudge_left = True
+        retry_pending = False  # the last round ended on a tool error the model may fix
         for _ in range(self.cfg.agent.max_tool_rounds):
             result = await self._complete(backend, messages, tools, stream)
             outcome.usage = outcome.usage + result.usage
             if not result.tool_calls:
-                outcome.text = result.content.strip() or "(réponse vide)"
-                outcome.finished = True
-                await stream.finish(outcome.text)
-                return outcome
+                if retry_pending and nudge_left:
+                    nudge_left = retry_pending = False
+                    messages.append(Message("assistant", result.content))
+                    messages.append(Message("user", RETRY_NUDGE))
+                    continue
+                return await self._finish(outcome, result.content.strip() or "(réponse vide)",
+                                          stream)  # fmt: skip
             messages.append(Message("assistant", result.content, tool_calls=result.tool_calls))
-            if await self._run_tools(result.tool_calls, ctx, messages, outcome):
+            failures = outcome.tool_failures
+            if await self._run_tools(result.tool_calls, ctx, messages, outcome, offered):
                 await stream.finish("↗️ Je transmets à un modèle plus puissant…")
                 return outcome
+            retry_pending = outcome.tool_failures > failures
             if outcome.tool_failures >= self.cfg.routing.escalation.max_tool_failures and (
                 tier == Tier.GPU
             ):
-                await stream.finish("⚠️ Les outils échouent, je passe la main…")
-                return outcome
-        outcome.text = "⚠️ Limite d'étapes atteinte sans réponse finale."
+                outcome.text = f"⚠️ Les outils échouent : {outcome.last_error[:300]}"
+                await stream.finish(outcome.text)
+                return outcome  # not finished: _hand_over decides whether another tier can try
+        return await self._finish(
+            outcome, "⚠️ Limite d'étapes atteinte sans réponse finale.", stream
+        )
+
+    @staticmethod
+    async def _finish(outcome: AgentOutcome, text: str, stream: StreamHandle) -> AgentOutcome:
+        outcome.text = text
         outcome.finished = True
-        await stream.finish(outcome.text)
+        await stream.finish(text)
         return outcome
 
     @staticmethod
@@ -408,13 +460,19 @@ class Orchestrator:
 
     async def _run_tools(
         self, calls: list[ToolCall], ctx: ToolContext, messages: list[Message],
-        outcome: AgentOutcome,
+        outcome: AgentOutcome, offered: set[str],
     ) -> bool:  # fmt: skip
         """Execute the calls of one round; True when the model asked to escalate."""
         for call in calls:
             tool = self.registry.get(call.name)
             is_action = tool is not None and "action" in tool.tags
-            r = await self.registry.execute(call.name, call.arguments, ctx)
+            if call.name in offered:
+                r = await self.registry.execute(call.name, call.arguments, ctx)
+            else:  # a tool of another tier (or invented): never run it
+                is_action = False
+                r = ToolResult(
+                    False, error=f"outil '{call.name}' indisponible ici", outcome="denied"
+                )
             METRICS.inc("tool_calls_total", tool=call.name, outcome=r.outcome)
             if not is_action:  # actions are audited by the Home Assistant service itself
                 await self.db.audit(
@@ -426,6 +484,8 @@ class Orchestrator:
                 return True
             if not r.ok and r.outcome == "error":
                 outcome.tool_failures += 1
+                outcome.failed_tools.add(call.name)
+                outcome.last_error = r.error or ""
             if r.ok and is_action:
                 outcome.actions.append(f"{call.name} {call.arguments_json()}"[:200])
             messages.append(Message("tool", r.to_text(), tool_call_id=call.id, name=call.name))

@@ -8,6 +8,8 @@
 #   monitoring  Prometheus + Grafana (tableau de bord fourni) : make up PROFILE=full,monitoring
 #   voice     voix : transcription (whisper.cpp) et synthèse (Piper), à ajouter à un autre profil :
 #             make up PROFILE=full,voice   (= COMPOSE_PROFILES=full,voice docker compose up -d)
+#   web       recherche Internet (SearXNG auto-hébergé) pour les outils web_* du modèle CPU :
+#             make up PROFILE=full,web   (+ web_tools.enabled: true dans config.yaml)
 #
 #   make up                 # = docker compose --profile full up -d
 #   docker compose --profile cpu-only up -d
@@ -105,6 +107,27 @@ services:
         required: false
     volumes:
       - ${MODELS_DIR:-./models}:/models:ro
+
+  # ------------------------------------------------------------------- web profile
+  # Moteur de recherche pour web_search. Aucun port publié : seul l'agent l'interroge,
+  # par le réseau Compose (http://searxng:8080). Il sort vers Internet pour chercher.
+  searxng:
+    image: searxng/searxng:2026.11.2-cccbc9e15
+    profiles: [web]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]
+    environment:
+      SEARXNG_BASE_URL: "http://searxng:8080/"
+      SEARXNG_SECRET: "${SEARXNG_SECRET:-change-me-searxng}"
+    volumes:
+      - ./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    tmpfs: [/var/cache/searxng, /tmp]
+    expose: ["8080"]
+    logging:
+      driver: json-file
+      options: { max-size: "1m", max-file: "1" }
 
   # ------------------------------------------------------------ monitoring profile
   prometheus:

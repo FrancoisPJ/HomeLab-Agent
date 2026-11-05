@@ -16,6 +16,8 @@ from typing import Any
 import httpx
 import websockets
 
+from homelab_agent.tools.homeassistant.catalog import ServiceCatalog
+
 log = logging.getLogger(__name__)
 
 REGISTRY_EVENTS = (
@@ -39,7 +41,9 @@ def sanitize_label(text: str, max_len: int = 60) -> str:
 
 
 class HAError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status  # HTTP status when Home Assistant answered with an error
 
 
 @dataclass(slots=True)
@@ -141,6 +145,17 @@ class EntityCache:
         ]
 
 
+def _error_text(resp: httpx.Response) -> str:
+    """Home Assistant's own message (``{"message": …}``) or the start of the body."""
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict) and isinstance(body.get("message"), str):
+        return sanitize_label(body["message"], 300)
+    return sanitize_label(resp.text, 200)
+
+
 class HomeAssistantClient:
     def __init__(
         self,
@@ -154,6 +169,7 @@ class HomeAssistantClient:
         self.url = url.rstrip("/")
         self.token = token
         self.cache = EntityCache()
+        self.services = ServiceCatalog()
         self.connected = False
         self._http = httpx.AsyncClient(
             base_url=self.url,
@@ -172,9 +188,11 @@ class HomeAssistantClient:
         except httpx.HTTPError as exc:
             raise HAError(f"Home Assistant unreachable: {exc.__class__.__name__}") from exc
         if resp.status_code == 401:
-            raise HAError("Home Assistant rejected the token (401)")
+            raise HAError("Home Assistant rejected the token (401)", 401)
         if resp.status_code >= 400:
-            raise HAError(f"Home Assistant HTTP {resp.status_code}: {resp.text[:200]}")
+            raise HAError(
+                f"Home Assistant HTTP {resp.status_code}: {_error_text(resp)}", resp.status_code
+            )
         return resp.json() if resp.content else None
 
     async def ping(self) -> bool:
@@ -236,8 +254,21 @@ class HomeAssistantClient:
             raise HAError(f"{entity_id}: empty image")
         return bytes(data), ctype
 
+    async def get_services(self) -> Any:
+        return await self._request("GET", "/api/services")
+
+    async def refresh_services(self) -> None:
+        """Reload the service catalogue; keep the previous one if Home Assistant fails."""
+        try:
+            self.services.load(await self.get_services())
+        except HAError as exc:
+            log.warning("home assistant services not loaded: %s", exc)
+            return
+        log.info("home assistant services: %d domains", len(self.services.domains))
+
     async def refresh_cache_rest(self) -> None:
         self.cache.load(await self.get_states())
+        await self.refresh_services()
 
     # ------------------------------------------------------------- WebSocket
     @property
@@ -272,6 +303,7 @@ class HomeAssistantClient:
             devices = await command({"type": "config/device_registry/list"})
             states = await command({"type": "get_states"})
             self.cache.load(states, areas, entities, devices)
+            await self.refresh_services()  # integrations may have changed while disconnected
             await command({"type": "subscribe_events", "event_type": "state_changed"})
             for registry in REGISTRY_EVENTS:
                 await command({"type": "subscribe_events", "event_type": registry})

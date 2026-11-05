@@ -22,6 +22,7 @@ async def test_rest_calls(ha_app: Any) -> None:
     assert (await c.history("light.salon", 2))[0]["state"] == "off"
     await c.refresh_cache_rest()
     assert "light.salon" in c.cache.entities
+    assert c.services.loaded and c.services.get("cover", "set_cover_position") is not None
     await c.aclose()
 
 
@@ -47,6 +48,8 @@ async def test_websocket_cache_and_live_updates(run_server: Any) -> None:
     await wait_for(lambda: c.connected, timeout=10)
     salon = c.cache.entities["light.salon"]
     assert salon.area_name == "Salon" and salon.state == "on"
+    # the service catalogue is (re)loaded at every connection
+    assert c.services.get("light", "turn_on") is not None
     assert set(c.cache.entities_in_area("salon")) >= {"light.salon", "sensor.temperature_salon"}
     await c.call_service("light", "turn_off", {"entity_id": "light.salon"})
     c.cache.entities["light.salon"].state = "stale"  # prove the websocket event refreshes it
