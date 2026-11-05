@@ -132,8 +132,10 @@ async def test_history_remembers_actions(tmp_path: Path) -> None:
     await h.orchestrator.handle(IncomingMessage("111", "111", "peux-tu éteindre la cuisine"), r)
     history = await h.db.history("111", 5)
     assert history[-1].role == "assistant"
-    assert "[actions effectuées : ha_call_service" in history[-1].content
-    assert "light.cuisine" in history[-1].content
+    # stored as structured actions (replayed as real tool calls), never as text
+    assert "actions effectuées" not in history[-1].content
+    assert history[-1].tool_calls is not None
+    assert history[-1].tool_calls[0]["arguments"]["entity_id"] == "light.cuisine"
     assert "actions effectuées" not in r.messages[-1]  # not shown to the user
     await h.close()
 

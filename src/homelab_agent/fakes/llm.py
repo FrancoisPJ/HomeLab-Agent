@@ -3,6 +3,10 @@
 Directives inside the last user message drive its behaviour:
 
 * ``[[tool:NAME {"json": "args"}]]`` → emits that tool call
+* ``[[retry:NAME {"json": "args"}]]`` → emits that call when the orchestrator nudges the
+  model (a message starting with ``[Système]``); without it, the fake gives up
+* ``[[lie]]`` → claims an action in text without calling any tool (``[[stubborn]]``: again
+  after the nudge)
 * ``[[escalate:cpu]]`` / ``[[escalate:cloud]]`` → calls the ``escalate`` tool
 * ``[[sleep:2.5]]`` → waits before answering
 * ``[[error:503]]`` → answers with that HTTP status
@@ -33,12 +37,19 @@ SLEEP_RE = re.compile(r"\[\[sleep:([0-9.]+)\]\]")
 ERROR_RE = re.compile(r"\[\[error:([0-9]{3})\]\]")
 
 
-def _tool_markers(text: str) -> list[tuple[str, str]]:
+NUDGE_PREFIX = "[Système]"
+LIE = (
+    "La lumière du salon a été réduite à 2 %.\n"
+    '[actions effectuées : ha_call_service {"domain": "light", "service": "turn_on"}]'
+)
+
+
+def _tool_markers(text: str, prefix: str = "[[tool:") -> list[tuple[str, str]]:
     """Find ``[[tool:name {json}]]`` markers (JSON optional) in one linear pass."""
     found: list[tuple[str, str]] = []
     pos = 0
-    while (start := text.find("[[tool:", pos)) != -1:
-        pos = start + len("[[tool:")
+    while (start := text.find(prefix, pos)) != -1:
+        pos = start + len(prefix)
         name = TOOL_NAME_RE.match(text, pos)
         if name is None:
             continue
@@ -76,7 +87,14 @@ def decide(body: dict[str, Any]) -> dict[str, Any]:
     tools = {t["function"]["name"] for t in body.get("tools") or []}
     model = body.get("model", "fake")
     last = messages[-1] if messages else {"role": "user", "content": ""}
-    user = next((m for m in reversed(messages) if m.get("role") == "user"), {"content": ""})
+    user = next(
+        (
+            m
+            for m in reversed(messages)
+            if m.get("role") == "user" and not str(m.get("content")).startswith(NUDGE_PREFIX)
+        ),
+        {"content": ""},
+    )
     utext = str(user.get("content") or "")
     system = " ".join(str(m.get("content")) for m in messages if m.get("role") == "system")
     out: dict[str, Any] = {"content": "", "tool_calls": [], "sleep": 0.0, "error": None}
@@ -85,6 +103,21 @@ def decide(body: dict[str, Any]) -> dict[str, Any]:
     if m := ERROR_RE.search(utext):
         out["error"] = int(m.group(1))
         return out
+    if last.get("role") == "user" and str(last.get("content")).startswith(NUDGE_PREFIX):
+        for name, raw in _tool_markers(utext, "[[retry:"):
+            if name in tools:
+                out["tool_calls"].append((name, json.loads(raw) if raw else {}))
+        if out["tool_calls"]:
+            return out
+        if "[[stubborn]]" in utext:
+            out["content"] = LIE
+            return out
+        turn = messages[next((i for i, m in enumerate(messages) if m is user), 0) :]
+        results = [m for m in turn if m.get("role") == "tool"]  # tool results of this turn
+        if not results:
+            out["content"] = "D'accord, je n'ai rien changé."
+            return out
+        last = results[-1]  # gives up again, with the same words
     if last.get("role") == "tool":
         try:
             result = json.loads(last.get("content") or "{}")
@@ -94,6 +127,9 @@ def decide(body: dict[str, Any]) -> dict[str, Any]:
             out["content"] = f"C'est fait ({model})."
         else:
             out["content"] = f"Impossible : {result.get('error', 'erreur inconnue')}"
+        return out
+    if "[[lie]]" in utext or "[[stubborn]]" in utext:
+        out["content"] = LIE
         return out
     if (m := ESC_RE.search(utext)) and "escalate" in tools:
         out["tool_calls"].append(("escalate", {"target": m.group(1), "reason": "test"}))

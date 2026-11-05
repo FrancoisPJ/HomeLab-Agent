@@ -7,11 +7,19 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any
 
 from homelab_agent.config.models import AppConfig, Tier
 from homelab_agent.core import fastpath
 from homelab_agent.core.budget import BudgetManager
+from homelab_agent.core.history import (
+    NO_ACTION_NUDGE,
+    NO_ACTION_REPLY,
+    action_record,
+    claims_action,
+    replay,
+    strip_fake_actions,
+)
 from homelab_agent.core.prompts import build_system_prompt
 from homelab_agent.core.router import TIER_LABELS, Router
 from homelab_agent.gateway.base import (
@@ -28,7 +36,6 @@ from homelab_agent.llm.base import (
     ContextOverflow,
     LLMBackend,
     Message,
-    Role,
     StreamDelta,
     StreamDone,
     ToolCall,
@@ -59,12 +66,9 @@ class AgentOutcome:
     escalation: dict[str, str] | None = None
     tool_failures: int = 0
     finished: bool = False
-    actions: list[str] = field(default_factory=list)  # successful action tools, for history
-
-    def history_text(self) -> str:
-        if not self.actions:
-            return self.text
-        return f"{self.text}\n[actions effectuées : {'; '.join(self.actions)}]"
+    #: action tools really executed, stored with the answer and replayed as tool calls
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    tools_ok: int = 0  # successful tool calls of this turn (any tool)
 
 
 class _NullStream:
@@ -212,7 +216,7 @@ class Orchestrator:
             return
         await self._account(msg.chat_id, backend, tier, outcome.usage, start, replier)
         if not await self._hand_over(msg, replier, tier, exclude, outcome, depth) and outcome.text:
-            await self.db.add_message(msg.chat_id, "assistant", outcome.history_text())
+            await self.db.add_message(msg.chat_id, "assistant", outcome.text, outcome.actions)
 
     async def _retry(
         self, msg: IncomingMessage, replier: Replier, tier: Tier, exclude: set[str],
@@ -295,16 +299,18 @@ class Orchestrator:
         # the current user message is already stored as the last item
         if history_rows and history_rows[-1].role == "user" and history_rows[-1].content == text:
             history_rows = history_rows[:-1]
+        offered = {t.name for t in tools} if tools is not None else None
+        # one group of messages per stored row: past actions come back as real tool calls
         history = [
-            Message(cast(Role, h.role), h.content)
+            replay(h.id, h.role, h.content, h.tool_calls, offered)
             for h in history_rows[-cfg.agent.history_messages :]
             if h.role in ("user", "assistant")
         ]
         user = Message("user", text)
 
-        def assemble(summary_text: str, hist: list[Message]) -> list[Message]:
+        def assemble(summary_text: str, hist: list[list[Message]]) -> list[Message]:
             system = Message("system", build_system_prompt(cfg, tier, summary_text, memories))
-            return [system, *hist, user]
+            return [system, *(m for group in hist for m in group), user]
 
         if backend is None or backend.max_context is None:
             return assemble(summary, history)
@@ -314,7 +320,13 @@ class Orchestrator:
         budget = backend.max_context - backend.max_output_tokens - tools_cost - 32
 
         def cost(msgs: list[Message]) -> int:
-            return sum(budget_tokens(m.content) + 4 for m in msgs)
+            return sum(
+                budget_tokens(
+                    m.content + "".join(c.name + c.arguments_json() for c in m.tool_calls)
+                )
+                + 4
+                for m in msgs
+            )
 
         messages = assemble(summary, history)
         while cost(messages) > budget and history:
@@ -367,11 +379,23 @@ class Orchestrator:
         if confirm is not None:
             ctx.confirm = confirm
         outcome = AgentOutcome()
+        nudge_left = True
         for _ in range(self.cfg.agent.max_tool_rounds):
             result = await self._complete(backend, messages, tools, stream)
             outcome.usage = outcome.usage + result.usage
             if not result.tool_calls:
-                outcome.text = result.content.strip() or "(réponse vide)"
+                text = strip_fake_actions(result.content)
+                lying = outcome.tools_ok == 0 and claims_action(result.content)
+                if lying and nudge_left:  # claims an action without any tool call: once more
+                    nudge_left = False
+                    messages.append(Message("assistant", text))
+                    messages.append(Message("user", NO_ACTION_NUDGE))
+                    continue
+                if lying:
+                    log.warning("model claimed an action without calling any tool")
+                    METRICS.inc("fake_actions_total")
+                    text = NO_ACTION_REPLY
+                outcome.text = text or "(réponse vide)"
                 outcome.finished = True
                 await stream.finish(outcome.text)
                 return outcome
@@ -426,8 +450,10 @@ class Orchestrator:
                 return True
             if not r.ok and r.outcome == "error":
                 outcome.tool_failures += 1
+            if r.ok:
+                outcome.tools_ok += 1
             if r.ok and is_action:
-                outcome.actions.append(f"{call.name} {call.arguments_json()}"[:200])
+                outcome.actions.append(action_record(call.name, call.arguments, r.to_text()))
             messages.append(Message("tool", r.to_text(), tool_call_id=call.id, name=call.name))
         return False
 
@@ -446,5 +472,5 @@ class Orchestrator:
             self.router.health.mark_down(backend.name)
             raise
         await self._account(chat_id, backend, Tier.CPU, outcome.usage, start, replier)
-        await self.db.add_message(chat_id, "assistant", outcome.history_text())
+        await self.db.add_message(chat_id, "assistant", outcome.text, outcome.actions)
         return outcome.text

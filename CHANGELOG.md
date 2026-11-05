@@ -5,6 +5,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## [Non publié]
 
+### Corrigé
+- **Le bot prétendait avoir agi sans rien faire** (Qwen3-8B) : les actions passées étaient écrites
+  dans l'historique en texte (`[actions effectuées : …]`) et le modèle recopiait ce texte au lieu
+  d'appeler l'outil. Les actions réellement exécutées sont maintenant enregistrées à part (colonne
+  `chat_messages.tool_calls`, migration automatique du schéma v1 → v2) et rejouées au modèle comme de
+  vrais appels d'outil avec leur résultat ; l'ancien suffixe est retiré des anciennes lignes. Une
+  réponse qui annonce une action (« a été réduite », « c'est fait », « j'ai éteint »…) sans aucun
+  appel d'outil dans le tour est relancée une fois (« tu n'as appelé aucun outil… »), puis remplacée
+  par « ⚠️ Je n'ai rien fait… » (métrique `fake_actions_total`).
+
 ## [0.5.1] - 2026-11-05
 
 ### Sécurité
