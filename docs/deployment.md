@@ -76,3 +76,8 @@ par vous :
       correctement et exécuté ; noter le temps de transcription.
 - [ ] Le panneau n'est pas joignable depuis une autre machine du réseau (seulement via `127.0.0.1` /
       tunnel SSH).
+- [ ] **Caméras** (`home_assistant.cameras.enabled: true`) : `/camera salon` envoie une photo nette
+      en quelques secondes ; une caméra passée en `deny` dans le panneau n'est plus proposée ;
+      l'audit montre `camera_snapshot`. Notez la taille des images (limite `max_bytes`).
+- [ ] **Grafana** (`make up PROFILE=full,monitoring`) : la cible Prometheus est `up`, le tableau de
+      bord se remplit après quelques messages.

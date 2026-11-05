@@ -5,6 +5,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## [Non publié]
 
+## [0.5.0] - 2026-11-05
+
 ### Ajouté
 - **Photos des caméras dans Telegram** : `/camera [pièce]` (boutons par pièce sans argument) et
   en langage naturel (« montre-moi l'entrée », outil `ha_camera_snapshot`). Désactivé par défaut
@@ -28,7 +30,6 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
   pré-remplir le chat (jamais envoyé sans Entrée). Sur téléphone, barre d'onglets en bas et
   pages secondaires dans la palette.
 - `web.grafana_url` : lien Grafana dans la barre du panneau.
-
 - Le **chat du panneau comprend les mêmes commandes que Telegram** (`/status`, `/routines`,
   `/memoire`, `/annuler`, `/help`…) : une seule table de commandes pour les deux passerelles.
 
@@ -96,6 +97,7 @@ Première version publique.
 - Panneau web (FastAPI + HTMX) : état, permissions, budget, tâches, audit, éditeur de config.
 - Faux services (LLM, Home Assistant, Telegram), tests, scénario e2e, CI/CD.
 
-[Non publié]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.4.0...HEAD
+[Non publié]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/FrancoisPJ/HomeLab-Agent/compare/v0.1.0...v0.4.0
 [0.1.0]: https://github.com/FrancoisPJ/HomeLab-Agent/releases/tag/v0.1.0
