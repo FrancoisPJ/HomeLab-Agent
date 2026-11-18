@@ -5,7 +5,7 @@
 ARG WHISPER_CPP_REF=v1.9.4
 ARG WHISPER_CPP_COMMIT=927cfce34f31707e17f2bff35c349632fb9e2c3a
 
-FROM ubuntu:24.04 AS build
+FROM ubuntu:25.10 AS build
 ARG WHISPER_CPP_REF
 ARG WHISPER_CPP_COMMIT
 RUN apt-get update \
@@ -26,7 +26,7 @@ RUN cmake -B build \
  && cp build/bin/whisper-server /out/ \
  && find build -name "*.so*" -exec cp -P {} /out/lib/ \;
 
-FROM ubuntu:24.04
+FROM ubuntu:25.10
 RUN apt-get update \
  && apt-get -y upgrade \
  && apt-get install -y --no-install-recommends ffmpeg curl libgomp1 ca-certificates \

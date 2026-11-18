@@ -10,7 +10,7 @@ ARG LLAMA_SWAP_VERSION=260
 # See docs/troubleshooting.md. Bump when a release ships x/net >= 0.60.
 ARG LLAMA_SWAP_SHA256=d856a908507560cbdc253300bcf49092c7ead3c85098687428b0c9d4832ff46d
 
-FROM ubuntu:24.04 AS build
+FROM ubuntu:25.10 AS build
 ARG LLAMA_CPP_REF
 ARG LLAMA_CPP_COMMIT
 RUN apt-get update \
@@ -35,7 +35,7 @@ RUN cmake -B build \
  && cp build/bin/llama-server /out/ \
  && find build -name "*.so*" -exec cp -P {} /out/lib/ \;
 
-FROM ubuntu:24.04 AS swap
+FROM ubuntu:25.10 AS swap
 ARG LLAMA_SWAP_VERSION
 ARG LLAMA_SWAP_SHA256
 ADD https://github.com/mostlygeek/llama-swap/releases/download/v${LLAMA_SWAP_VERSION}/llama-swap_${LLAMA_SWAP_VERSION}_linux_amd64.tar.gz /tmp/ls.tgz
@@ -43,7 +43,7 @@ RUN echo "${LLAMA_SWAP_SHA256}  /tmp/ls.tgz" | sha256sum -c - \
  && tar -xzf /tmp/ls.tgz -C /tmp \
  && install -m 0755 /tmp/llama-swap /llama-swap
 
-FROM ubuntu:24.04
+FROM ubuntu:25.10
 RUN apt-get update \
  && apt-get -y upgrade \
  && apt-get install -y --no-install-recommends curl libgomp1 ca-certificates \
